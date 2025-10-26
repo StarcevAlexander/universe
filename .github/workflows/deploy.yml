@@ -1,4 +1,4 @@
-name: Deploy Angular App
+name: Deploy Full Stack App
 
 on:
   push:
@@ -13,7 +13,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js for Angular
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -26,17 +26,80 @@ jobs:
           echo "=== Angular build files ==="
           ls -la dist/browser/
 
-      - name: Deploy Angular files
+      - name: Setup Go for backend
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.5'
+
+      - name: Build Go backend
+        run: |
+          cd backend
+          go mod download
+          GOOS=linux GOARCH=amd64 go build -o app main.go
+          echo "=== Go binary built ==="
+          ls -la
+
+      - name: Deploy full stack
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
           chmod 600 ~/.ssh/key
           
-          echo "Deploying from frontend/dist/browser/"
-          # ПРАВИЛЬНЫЙ ПУТЬ: frontend/dist/browser/
+          echo "Deploying Angular frontend..."
           scp -i ~/.ssh/key \
               -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
               -r frontend/dist/browser/* deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
           
-          echo "🎉 Angular app deployed! Visit: http://${{ secrets.VM_HOST }}/"
+          echo "Deploying Go backend..."
+          scp -i ~/.ssh/key \
+              -o StrictHostKeyChecking=no \
+              backend/app deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
+          
+          # Копируем необходимые Go файлы если нужно
+          scp -i ~/.ssh/key \
+              -o StrictHostKeyChecking=no \
+              backend/go.mod backend/go.sum deploy@${{ secrets.VM_HOST }}:/var/www/your-app/ 2>/dev/null || echo "No go.mod/go.sum to copy"
+
+      - name: Setup server and start application
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
+          chmod 600 ~/.ssh/key
+          
+          ssh -i ~/.ssh/key \
+              -o StrictHostKeyChecking=no \
+              deploy@${{ secrets.VM_HOST }} "
+          
+          # Устанавливаем MySQL
+          echo 'Installing MySQL...'
+          sudo apt update
+          sudo apt install -y mysql-server
+          
+          # Запускаем MySQL
+          sudo systemctl start mysql
+          sudo systemctl enable mysql
+          
+          # Настраиваем базу данных (замените на вашу конфигурацию)
+          sudo mysql -e \"
+          CREATE DATABASE IF NOT EXISTS myapp;
+          CREATE USER IF NOT EXISTS 'myuser'@'localhost' IDENTIFIED BY 'mypassword';
+          GRANT ALL PRIVILEGES ON myapp.* TO 'myuser'@'localhost';
+          FLUSH PRIVILEGES;
+          \"
+          
+          # Даем права на бинарник Go
+          cd /var/www/your-app
+          chmod +x app
+          
+          # Останавливаем предыдущую версию если запущена
+          sudo pkill app || true
+          
+          # Запускаем новую версию
+          nohup ./app > app.log 2>&1 &
+          
+          echo 'MySQL installed and application started!'
+          echo 'Check app logs: tail -f /var/www/your-app/app.log'
+          "
+          
+          echo "🎉 Full stack deployed! Frontend: http://${{ secrets.VM_HOST }}/"
