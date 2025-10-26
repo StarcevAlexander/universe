@@ -36,6 +36,20 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -o app main.go
           echo "✅ Go backend built successfully"
 
+      - name: Stop application on server
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
+          chmod 600 ~/.ssh/key
+          
+          ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
+            echo 'Stopping application...'
+            sudo systemctl stop myapp.service || echo 'Service was not running'
+            sleep 2
+            # Убедимся что процесс остановлен
+            sudo pkill app || echo 'No app process found'
+          "
+
       - name: Deploy to server
         run: |
           mkdir -p ~/.ssh
@@ -53,7 +67,7 @@ jobs:
               -o StrictHostKeyChecking=no \
               backend/app deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
 
-      - name: Restart application
+      - name: Start application
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
@@ -62,8 +76,8 @@ jobs:
           ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
             cd /var/www/your-app
             chmod +x app
-            sudo systemctl restart myapp.service
-            echo '✅ Application restarted'
+            sudo systemctl start myapp.service
+            echo '✅ Application started'
             sudo systemctl status myapp.service --no-pager
           "
 
