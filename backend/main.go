@@ -27,7 +27,7 @@ const (
 	SMTPHost     = "smtp.yandex.ru"
 	SMTPPort     = "587"
 	SMTPUsername = "79140050089@yandex.ru"
-	SMTPPassword = "qoskpuzbchyqught"
+	SMTPPassword = "tizbbljkcbdoproq"
 	ToEmail      = "79140050089@yandex.ru"
 	UploadDir    = "video"
 	DBConnection = "myuser:mypassword@tcp(localhost:3306)/myapp?charset=utf8mb4"
