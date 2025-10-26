@@ -1,32 +1,20 @@
-name: Deploy via SSH
+name: Debug SSH
 
 on: workflow_dispatch
 
 jobs:
-  deploy:
+  debug:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build Angular
-        run: |
-          cd frontend
-          npm install
-          npm run build:prod
-
-      - name: Deploy using tar over SSH
+      - name: Debug SSH connection
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
           chmod 600 ~/.ssh/key
           
-          # Используем tar через SSH - более надежно
-          cd frontend/dist/frontend/browser/
-          tar cz . | ssh -i ~/.ssh/key \
+          echo "=== Testing basic SSH ==="
+          ssh -i ~/.ssh/key \
               -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
-              deploy@${{ secrets.VM_HOST }} "cd /var/www/your-app && tar xz"
-          
-          echo "✅ Files deployed via SSH tar"
+              -o ConnectTimeout=10 \
+              deploy@${{ secrets.VM_HOST }} "echo 'SSH SUCCESS!'; ls -la /var/www/your-app/"
