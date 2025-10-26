@@ -82,8 +82,8 @@ export class App implements OnInit {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (file.size > 100 * 1024 * 1024) {
-      this.showMessage('video', 'error', 'Файл слишком большой (макс. 100MB)');
+    if (file.size > 2 * 1024 * 1024 * 1024) {
+      this.showMessage('video', 'error', 'Файл слишком большой (макс. 2GB)');
       return;
     }
 

@@ -227,9 +227,10 @@ func uploadCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := r.ParseMultipartForm(100 << 20) // 100 MB
+	// Увеличиваем лимит до 2GB (2 << 30)
+	err := r.ParseMultipartForm(2 << 30) // 2GB
 	if err != nil {
-		http.Error(w, "Слишком большой файл или ошибка загрузки", http.StatusBadRequest)
+		http.Error(w, "Слишком большой файл (макс. 2GB) или ошибка загрузки", http.StatusBadRequest)
 		return
 	}
 
