@@ -921,7 +921,7 @@ func uploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 		"filename":    newFilename,
 		"size":        totalBytes,
 		"uploaded_at": time.Now().Format("2006-01-02 15:04:05"),
-		"url":         "/api/video/" + newFilename,
+		"url":         "/video/" + newFilename,
 	})
 }
 
