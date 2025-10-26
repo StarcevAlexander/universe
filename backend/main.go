@@ -507,15 +507,57 @@ func sendCSVByEmail() error {
 	msg.WriteString("\r\n")
 	msg.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
 
-	// Отправка с таймаутом
-	auth := smtp.PlainAuth("", SMTPUsername, SMTPPassword, SMTPHost)
-
 	// Создаем канал для таймаута
 	done := make(chan error, 1)
 
 	go func() {
-		err = smtp.SendMail(SMTPHost+":"+SMTPPort, auth, SMTPUsername, []string{ToEmail}, msg.Bytes())
-		done <- err
+		// Настройки SMTP для Яндекс
+		auth := smtp.PlainAuth("", SMTPUsername, SMTPPassword, SMTPHost)
+
+		// Подключаемся к SMTP серверу
+		client, err := smtp.Dial(SMTPHost + ":" + SMTPPort)
+		if err != nil {
+			done <- fmt.Errorf("ошибка подключения к SMTP: %v", err)
+			return
+		}
+		defer client.Close()
+
+		// Начинаем TLS
+		if err = client.StartTLS(nil); err != nil {
+			done <- fmt.Errorf("ошибка STARTTLS: %v", err)
+			return
+		}
+
+		// Аутентификация
+		if err = client.Auth(auth); err != nil {
+			done <- fmt.Errorf("ошибка аутентификации: %v", err)
+			return
+		}
+
+		// Устанавливаем отправителя и получателя
+		if err = client.Mail(SMTPUsername); err != nil {
+			done <- fmt.Errorf("ошибка установки отправителя: %v", err)
+			return
+		}
+		if err = client.Rcpt(ToEmail); err != nil {
+			done <- fmt.Errorf("ошибка установки получателя: %v", err)
+			return
+		}
+
+		// Отправляем данные
+		writer, err := client.Data()
+		if err != nil {
+			done <- fmt.Errorf("ошибка создания writer: %v", err)
+			return
+		}
+		defer writer.Close()
+
+		if _, err = writer.Write(msg.Bytes()); err != nil {
+			done <- fmt.Errorf("ошибка отправки данных: %v", err)
+			return
+		}
+
+		done <- nil
 	}()
 
 	// Ждем с таймаутом 30 секунд
@@ -524,12 +566,11 @@ func sendCSVByEmail() error {
 		if err != nil {
 			return fmt.Errorf("ошибка отправки почты: %v", err)
 		}
+		log.Printf("✅ Письмо с бэкапом отправлено: %s", subject)
+		return nil
 	case <-time.After(30 * time.Second):
 		return fmt.Errorf("таймаут отправки почты: соединение заняло более 30 секунд")
 	}
-
-	log.Printf("Письмо с бэкапом отправлено: %s", subject)
-	return nil
 }
 
 // sendCSVHandler обрабатывает запрос на отправку CSV по почте
