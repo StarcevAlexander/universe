@@ -1,72 +1,44 @@
-name: Build and Deploy
+name: Deploy to VM
 
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-
-      - name: Build Frontend
-        run: |
-          cd frontend
-          npm install
-          npm run build
-          echo "✅ Frontend built successfully!"
-
-      - name: Build Backend
-        run: |
-          cd backend
-          go mod download
-          go build -o app
-          echo "✅ Backend built successfully!"
-
-      - name: List build results
-        run: |
-          echo "=== Build Results ==="
-          ls -la frontend/dist/
-          ls -la backend/app
-
-      - name: Deploy to VM
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: appleboy/scp-action@v0.1.3
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USERNAME }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          source: "frontend/dist/browser/,backend/app"
-          target: "/opt/universe/"
-          overwrite: true
-
-      - name: Restart service on VM
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USERNAME }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          script: |
-            cd /opt/universe
-            chmod +x app
-            sudo systemctl daemon-reload
-            sudo systemctl restart universe.service
-            echo "🚀 Deployment completed successfully!"
-            echo "📊 Service status:"
-            sudo systemctl status universe.service --no-pager
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js (если нужно)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Build project
+      run: npm run build
+      
+    - name: Deploy to server
+      uses: appleboy/scp-action@v0.1.3
+      with:
+        host: ${{ secrets.VM_HOST }}
+        username: ${{ secrets.VM_USERNAME }}
+        key: ${{ secrets.VM_SSH_KEY }}
+        source: "build/*"
+        target: "/var/www/your-app"
+        
+    - name: Restart service
+      uses: appleboy/ssh-action@v0.1.3
+      with:
+        host: ${{ secrets.VM_HOST }}
+        username: ${{ secrets.VM_USERNAME }}
+        key: ${{ secrets.VM_SSH_KEY }}
+        script: |
+          cd /var/www/your-app
+          npm install --production
+          pm2 restart your-app
