@@ -134,7 +134,6 @@ export class App implements OnInit {
           <source src="${videoUrl}" type="video/mp4">
           Ваш браузер не поддерживает видео тег.
         </video>
-        <div class="video-loading">Загрузка видео...</div>
         <div class="video-error" style="display: none;">
           Ошибка загрузки видео. Попробуйте позже.
         </div>
