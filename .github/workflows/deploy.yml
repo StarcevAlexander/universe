@@ -1,80 +1,40 @@
-name: Deploy with Web Server
+name: Deploy Angular App
 
-on: workflow_dispatch
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Deploy and setup web server
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install and build Angular
+        run: |
+          cd frontend
+          npm install
+          npm run build:prod
+          echo "=== Built files ==="
+          ls -la dist/
+
+      - name: Deploy to server
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
           chmod 600 ~/.ssh/key
           
-          # Создаем тестовую страницу
-          cat > index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <title>My App</title>
-              <style>
-                  body { 
-                      font-family: Arial, sans-serif; 
-                      margin: 0; padding: 40px;
-                      background: linear-gradient(135deg, #667eea, #764ba2);
-                      color: white; text-align: center;
-                      min-height: 100vh;
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                  }
-                  .container {
-                      background: rgba(255,255,255,0.1);
-                      padding: 40px; border-radius: 15px;
-                      backdrop-filter: blur(10px);
-                  }
-              </style>
-          </head>
-          <body>
-              <div class="container">
-                  <h1>🚀 My Application</h1>
-                  <p>Successfully deployed via GitHub Actions!</p>
-                  <p>Server: 95.163.229.106</p>
-              </div>
-          </body>
-          </html>
-          EOF
+          echo "Deploying Angular app..."
+          # Очищаем папку на сервере и копируем новую сборку
+          ssh -i ~/.ssh/key deploy@${{ secrets.VM_HOST }} "rm -rf /var/www/your-app/*"
+          scp -i ~/.ssh/key -o StrictHostKeyChecking=no -r frontend/dist/* deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
           
-          # Копируем на сервер
-          scp -i ~/.ssh/key index.html deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
-          
-          # Устанавливаем и настраиваем nginx на сервере
-          ssh -i ~/.ssh/key deploy@${{ secrets.VM_HOST }} "
-            sudo apt update && sudo apt install -y nginx
-          
-            # Создаем конфиг nginx
-            sudo tee /etc/nginx/sites-available/your-app > /dev/null << 'NGINX_CONFIG'
-            server {
-                listen 80;
-                server_name _;
-                root /var/www/your-app;
-                index index.html;
-          
-                location / {
-                    try_files \$uri \$uri/ =404;
-                }
-            }
-            NGINX_CONFIG
-          
-            # Активируем сайт
-            sudo ln -sf /etc/nginx/sites-available/your-app /etc/nginx/sites-enabled/
-            sudo rm -f /etc/nginx/sites-enabled/default
-            sudo nginx -t && sudo systemctl restart nginx
-            sudo systemctl enable nginx
-            echo 'Web server configured!'
-          "
-          
-          echo "🌐 Website should be available at http://95.163.229.106/"
+          echo "🌐 Website deployed: http://${{ secrets.VM_HOST }}/"
