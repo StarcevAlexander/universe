@@ -90,11 +90,8 @@ export class App implements OnInit {
     const formData = new FormData();
     formData.append('video', file);
 
-    this.showMessage('video', 'loading', 'Загрузка видео...');
-
     this.http.post<any>('/api/upload-video', formData).subscribe({
       next: (result) => {
-        this.showMessage('video', 'success', `✅ Видео успешно загружено: ${result.filename}`);
         this.loadVideos();
         event.target.value = '';
       },
