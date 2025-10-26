@@ -1,4 +1,4 @@
-name: Build Application
+name: Build and Deploy
 
 on:
   push:
@@ -43,3 +43,30 @@ jobs:
           echo "=== Build Results ==="
           ls -la frontend/dist/
           ls -la backend/app
+
+      - name: Deploy to VM
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: appleboy/scp-action@v0.1.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          source: "frontend/dist/browser/,backend/app"
+          target: "/opt/universe/"
+          overwrite: true
+
+      - name: Restart service on VM
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            cd /opt/universe
+            chmod +x app
+            sudo systemctl daemon-reload
+            sudo systemctl restart universe.service
+            echo "🚀 Deployment completed successfully!"
+            echo "📊 Service status:"
+            sudo systemctl status universe.service --no-pager
