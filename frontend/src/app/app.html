@@ -58,7 +58,7 @@
   <!-- Загрузка видео -->
   <div class="section">
     <h2>🎥 Загрузка видео</h2>
-    <p>Загрузите видео файлы (макс. 100MB). Поддерживаемые формата: MP4, AVI, MOV, WMV, FLV, WebM, MKV</p>
+    <p>Загрузите видео файлы (макс. 2Гб). Поддерживаемые формата: MP4, AVI, MOV, WMV, FLV, WebM, MKV</p>
     <input type="file" #videoFile (change)="uploadVideo($event)" accept="video/*"/>
     <div class="message" [class.success]="messages.video.includes('✅')"
          [class.error]="messages.video.includes('❌')"
