@@ -157,6 +157,13 @@ func initDB() {
 }
 
 func main() {
+	server := &http.Server{
+		Addr:         ":8080",
+		ReadTimeout:  30 * time.Minute,  // 30 минут для загрузки
+		WriteTimeout: 30 * time.Minute,  // 30 минут для ответа
+		IdleTimeout:  120 * time.Second, // 2 минуты
+	}
+
 	if err := os.MkdirAll(UploadDir, 0755); err != nil {
 		log.Printf("Ошибка создания папки %s: %v", UploadDir, err)
 	}
@@ -218,6 +225,7 @@ func main() {
 	log.Println("Сервер запущен на :8080")
 	log.Println("Статика загружается из:", staticDir)
 	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(server.ListenAndServe())
 }
 
 // uploadCSV обрабатывает загрузку CSV-файла
@@ -797,12 +805,12 @@ func uploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-    // Увеличиваем лимит до 2GB (2 << 30)
-    err := r.ParseMultipartForm(2 << 30) // 2GB
-    if err != nil {
-        http.Error(w, "Слишком большой файл (макс. 2GB) или ошибка загрузки", http.StatusBadRequest)
-        return
-    }
+	// Увеличиваем лимит до 2GB (2 << 30)
+	err := r.ParseMultipartForm(2 << 30) // 2GB
+	if err != nil {
+		http.Error(w, "Слишком большой файл (макс. 2GB) или ошибка загрузки", http.StatusBadRequest)
+		return
+	}
 
 	file, header, err := r.FormFile("video")
 	if err != nil {
