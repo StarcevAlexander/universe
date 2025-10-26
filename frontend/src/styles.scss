@@ -1,9 +1,16 @@
+/* Сбрасываем ограничения для body */
 body {
   font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f9f9f9;
+}
+
+/* Основной контент страницы в центре */
+.main-container {
   max-width: 900px;
   margin: 20px auto;
   padding: 20px;
-  background-color: #f9f9f9;
 }
 
 h1 {
@@ -31,6 +38,7 @@ button {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  transition: background-color 0.2s;
 }
 
 button:hover {
@@ -141,4 +149,243 @@ th {
   color: #6c757d;
   font-style: italic;
   padding: 20px;
+}
+
+/* Стили для видео попапа */
+.video-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.video-popup-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.video-popup-content {
+  position: relative;
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 1000px;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
+  animation: popupAppear 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes popupAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.video-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  flex-shrink: 0;
+}
+
+.video-popup-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #2d3748;
+  font-weight: 600;
+  flex: 1;
+  margin-right: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #6c757d;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  line-height: 1;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  background: #e9ecef;
+  color: #495057;
+  transform: scale(1.1);
+}
+
+.video-container {
+  position: relative;
+  background: #000;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.video-container video {
+  width: 100%;
+  height: auto;
+  max-height: calc(90vh - 140px);
+  display: block;
+  outline: none;
+}
+
+.video-loading, .video-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 16px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 16px 24px;
+  border-radius: 10px;
+  z-index: 10;
+}
+
+.video-error {
+  color: #ff6b6b;
+  background: rgba(0, 0, 0, 0.9);
+}
+
+.video-info {
+  padding: 16px 24px;
+  background: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+  flex-shrink: 0;
+}
+
+.video-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #6c757d;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.video-stats span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .main-container {
+    padding: 15px;
+    margin: 10px auto;
+  }
+
+  .video-popup {
+    padding: 10px;
+  }
+
+  .video-popup-content {
+    width: 95%;
+    border-radius: 12px;
+  }
+
+  .video-popup-header {
+    padding: 14px 16px;
+  }
+
+  .video-popup-header h3 {
+    font-size: 16px;
+  }
+
+  .video-info {
+    padding: 12px 16px;
+  }
+
+  .video-stats {
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .close-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 24px;
+  }
+
+  .section {
+    padding: 15px;
+    margin-bottom: 20px;
+  }
+}
+
+/* Для очень маленьких экранов */
+@media (max-width: 480px) {
+  .main-container {
+    padding: 10px;
+    margin: 5px auto;
+  }
+
+  .video-popup-content {
+    width: 98%;
+    max-height: 85vh;
+  }
+
+  .video-container video {
+    max-height: calc(85vh - 120px);
+  }
+
+  .video-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .video-actions {
+    align-self: flex-end;
+  }
+}
+
+/* Улучшение фокуса для доступности */
+.video-popup-content:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+/* Класс для блокировки скролла когда открыт попап */
+body.popup-open {
+  overflow: hidden;
 }

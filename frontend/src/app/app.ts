@@ -118,9 +118,11 @@ export class App implements OnInit {
 
   // Просмотр видео
   viewVideo(filename: string) {
-    const videoUrl = `/api/video/${filename}`; // Используем API путь
+    const videoUrl = `/api/video/${filename}`;
 
-    // Создаем попап элемент
+    // Блокируем скролл body
+    document.body.classList.add('popup-open');
+
     const popup = document.createElement('div');
     popup.className = 'video-popup';
     popup.innerHTML = `
@@ -128,7 +130,7 @@ export class App implements OnInit {
     <div class="video-popup-content">
       <div class="video-popup-header">
         <h3>${filename}</h3>
-        <button class="close-btn">×</button>
+        <button class="close-btn" aria-label="Закрыть видео">×</button>
       </div>
       <div class="video-container">
         <video controls autoplay preload="metadata" playsinline>
@@ -149,92 +151,33 @@ export class App implements OnInit {
     </div>
   `;
 
-    // Добавляем попап на страницу
     document.body.appendChild(popup);
-    document.body.style.overflow = 'hidden'; // Блокируем скролл страницы
 
-    const video = popup.querySelector('video') as HTMLVideoElement;
-    const closeBtn = popup.querySelector('.close-btn') as HTMLButtonElement;
-    const overlay = popup.querySelector('.video-popup-overlay') as HTMLDivElement;
-    const loadingEl = popup.querySelector('.video-loading') as HTMLDivElement;
-    const errorEl = popup.querySelector('.video-error') as HTMLDivElement;
-    const loadStatus = popup.querySelector('.load-status') as HTMLSpanElement;
-    const durationStatus = popup.querySelector('.duration-status') as HTMLSpanElement;
-
-    // Обработчики событий видео
-    if (video) {
-      video.addEventListener('loadstart', () => {
-        loadingEl.style.display = 'block';
-      });
-
-      video.addEventListener('loadeddata', () => {
-        loadingEl.style.display = 'none';
-      });
-
-      video.addEventListener('progress', () => {
-        if (video.buffered.length > 0) {
-          const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-          const duration = video.duration;
-          if (duration > 0) {
-            const percent = (bufferedEnd / duration * 100).toFixed(1);
-            loadStatus.textContent = `${percent}%`;
-          }
-        }
-      });
-
-      video.addEventListener('loadedmetadata', () => {
-        const duration = video.duration;
-        if (duration && isFinite(duration)) {
-          const minutes = Math.floor(duration / 60);
-          const seconds = Math.floor(duration % 60);
-          durationStatus.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }
-      });
-
-      video.addEventListener('error', () => {
-        loadingEl.style.display = 'none';
-        errorEl.style.display = 'block';
-        console.error('Ошибка загрузки видео:', video.error);
-      });
-
-      video.addEventListener('canplaythrough', () => {
-        loadingEl.style.display = 'none';
-      });
-
-      // Автоматический фокус на видео для управления с клавиатуры
-      setTimeout(() => video.focus(), 100);
-    }
-
-    // Функция закрытия попапа
     const closePopup = () => {
+      const video = popup.querySelector('video') as HTMLVideoElement;
       if (video) {
         video.pause();
-        video.src = ''; // Освобождаем ресурсы
+        video.src = '';
       }
       popup.remove();
-      document.body.style.overflow = '';
+      document.body.classList.remove('popup-open');
       document.removeEventListener('keydown', closeOnEsc);
     };
 
-    // Закрытие по клику на кнопку
-    closeBtn.addEventListener('click', closePopup);
+    const closeBtn = popup.querySelector('.close-btn') as HTMLButtonElement;
+    const overlay = popup.querySelector('.video-popup-overlay') as HTMLDivElement;
 
-    // Закрытие по клику на оверлей
+    closeBtn.addEventListener('click', closePopup);
     overlay.addEventListener('click', closePopup);
 
-    // Закрытие по ESC
     const closeOnEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closePopup();
-      }
+      if (event.key === 'Escape') closePopup();
     };
     document.addEventListener('keydown', closeOnEsc);
 
-    // Предотвращаем закрытие при клике на само видео
-    const videoContent = popup.querySelector('.video-popup-content') as HTMLDivElement;
-    videoContent.addEventListener('click', (event) => {
-      event.stopPropagation();
-    });
+    // Предотвращаем закрытие при клике на контент
+    const content = popup.querySelector('.video-popup-content') as HTMLDivElement;
+    content.addEventListener('click', (event) => event.stopPropagation());
   }
 
   // Удаление видео

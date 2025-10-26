@@ -1,89 +1,91 @@
-<h1>Экспорт и импорт пользователей</h1>
+<div class="main-container">
+  <h1>Экспорт и импорт пользователей</h1>
 
-<!-- Отправка по email -->
-<div class="section">
-  <h2>📧 Отправка CSV по почте</h2>
-  <p>Отправить CSV файл с пользователями на почту</p>
-  <button (click)="sendCSVByEmail()">Отправить по почте</button>
-  <div class="message" [class.success]="messages.email.includes('✅')"
-       [class.error]="messages.email.includes('❌')"
-       [class.loading]="messages.email.includes('Загрузка')">
-    {{ messages.email }}
+  <!-- Отправка по email -->
+  <div class="section">
+    <h2>📧 Отправка CSV по почте</h2>
+    <p>Отправить CSV файл с пользователями на почту</p>
+    <button (click)="sendCSVByEmail()">Отправить по почте</button>
+    <div class="message" [class.success]="messages.email.includes('✅')"
+         [class.error]="messages.email.includes('❌')"
+         [class.loading]="messages.email.includes('Загрузка')">
+      {{ messages.email }}
+    </div>
   </div>
-</div>
 
-<!-- Просмотр данных -->
-<div class="section">
-  <h2>👁️ Просмотр данных из базы</h2>
-  <button (click)="loadData()">Обновить и показать данные</button>
-  <div id="dataContainer">
-    <table *ngIf="users.length > 0">
-      <thead>
-      <tr>
-        <th>ID</th>
-        <th>Имя</th>
-      </tr>
-      </thead>
-      <tbody>
-      <tr *ngFor="let user of users">
-        <td>{{ user.id }}</td>
-        <td>{{ user.name }}</td>
-      </tr>
-      </tbody>
-    </table>
-    <p *ngIf="users.length === 0">Нажмите кнопку, чтобы загрузить данные.</p>
+  <!-- Просмотр данных -->
+  <div class="section">
+    <h2>👁️ Просмотр данных из базы</h2>
+    <button (click)="loadData()">Обновить и показать данные</button>
+    <div id="dataContainer">
+      <table *ngIf="users.length > 0">
+        <thead>
+        <tr>
+          <th>ID</th>
+          <th>Имя</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr *ngFor="let user of users">
+          <td>{{ user.id }}</td>
+          <td>{{ user.name }}</td>
+        </tr>
+        </tbody>
+      </table>
+      <p *ngIf="users.length === 0">Нажмите кнопку, чтобы загрузить данные.</p>
+    </div>
   </div>
-</div>
 
-<!-- Экспорт -->
-<div class="section">
-  <h2>📥 Экспорт данных в CSV</h2>
-  <p>Скачайте текущие данные из базы в формате CSV (UTF-8 с разделителем <code>;</code>).</p>
-  <button (click)="exportCSV()">Скачать CSV</button>
-</div>
-
-<!-- Импорт -->
-<div class="section">
-  <h2>📤 Импорт данных из CSV</h2>
-  <p>Загрузите CSV-файл. Содержимое таблицы <code>users</code> будет <strong>полностью заменено</strong>.</p>
-  <input type="file" #csvFile (change)="uploadCSV($event)" accept=".csv"/>
-  <div class="message" [class.success]="messages.upload.includes('✅')"
-       [class.error]="messages.upload.includes('❌')"
-       [class.loading]="messages.upload.includes('Загрузка')">
-    {{ messages.upload }}
+  <!-- Экспорт -->
+  <div class="section">
+    <h2>📥 Экспорт данных в CSV</h2>
+    <p>Скачайте текущие данные из базы в формате CSV (UTF-8 с разделителем <code>;</code>).</p>
+    <button (click)="exportCSV()">Скачать CSV</button>
   </div>
-</div>
 
-<!-- Загрузка видео -->
-<div class="section">
-  <h2>🎥 Загрузка видео</h2>
-  <p>Загрузите видео файлы (макс. 100MB). Поддерживаемые формата: MP4, AVI, MOV, WMV, FLV, WebM, MKV</p>
-  <input type="file" #videoFile (change)="uploadVideo($event)" accept="video/*"/>
-  <div class="message" [class.success]="messages.video.includes('✅')"
-       [class.error]="messages.video.includes('❌')"
-       [class.loading]="messages.video.includes('Загрузка')">
-    {{ messages.video }}
+  <!-- Импорт -->
+  <div class="section">
+    <h2>📤 Импорт данных из CSV</h2>
+    <p>Загрузите CSV-файл. Содержимое таблицы <code>users</code> будет <strong>полностью заменено</strong>.</p>
+    <input type="file" #csvFile (change)="uploadCSV($event)" accept=".csv"/>
+    <div class="message" [class.success]="messages.upload.includes('✅')"
+         [class.error]="messages.upload.includes('❌')"
+         [class.loading]="messages.upload.includes('Загрузка')">
+      {{ messages.upload }}
+    </div>
   </div>
-</div>
 
-<!-- Список загруженных видео -->
-<div class="section">
-  <h2>📹 Загруженные видео</h2>
-  <button (click)="loadVideos()">Обновить список видео</button>
-  <div class="video-list">
-    <div class="video-item" *ngFor="let video of videos">
-      <div class="video-info">
-        <div class="video-name">{{ video.filename }}</div>
-        <div class="video-meta">
-          Размер: {{ (video.size / (1024 * 1024)).toFixed(2) }} MB |
-          Загружено: {{ video.uploaded_at }}
+  <!-- Загрузка видео -->
+  <div class="section">
+    <h2>🎥 Загрузка видео</h2>
+    <p>Загрузите видео файлы (макс. 100MB). Поддерживаемые формата: MP4, AVI, MOV, WMV, FLV, WebM, MKV</p>
+    <input type="file" #videoFile (change)="uploadVideo($event)" accept="video/*"/>
+    <div class="message" [class.success]="messages.video.includes('✅')"
+         [class.error]="messages.video.includes('❌')"
+         [class.loading]="messages.video.includes('Загрузка')">
+      {{ messages.video }}
+    </div>
+  </div>
+
+  <!-- Список загруженных видео -->
+  <div class="section">
+    <h2>📹 Загруженные видео</h2>
+    <button (click)="loadVideos()">Обновить список видео</button>
+    <div class="video-list">
+      <div class="video-item" *ngFor="let video of videos">
+        <div class="video-info">
+          <div class="video-name">{{ video.filename }}</div>
+          <div class="video-meta">
+            Размер: {{ (video.size / (1024 * 1024)).toFixed(2) }} MB |
+            Загружено: {{ video.uploaded_at }}
+          </div>
+        </div>
+        <div class="video-actions">
+          <button class="btn-view" (click)="viewVideo(video.filename)">👁️ Смотреть</button>
+          <button class="btn-delete" (click)="deleteVideo(video.filename)">🗑️ Удалить</button>
         </div>
       </div>
-      <div class="video-actions">
-        <button class="btn-view" (click)="viewVideo(video.filename)">👁️ Смотреть</button>
-        <button class="btn-delete" (click)="deleteVideo(video.filename)">🗑️ Удалить</button>
-      </div>
+      <p *ngIf="videos.length === 0" class="no-videos">Нет загруженных видео</p>
     </div>
-    <p *ngIf="videos.length === 0" class="no-videos">Нет загруженных видео</p>
   </div>
 </div>
