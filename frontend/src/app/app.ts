@@ -118,9 +118,44 @@ export class App implements OnInit {
 
   // Просмотр видео
   viewVideo(filename: string) {
-    const videoUrl = `/api/video/${filename}`;
-    // Реализация модального окна (можно использовать Angular Material Dialog)
-    window.open(videoUrl, '_blank');
+    const videoUrl = `/video/${filename}`; // Используем прямой путь к видео
+
+    // Создаем попап элемент
+    const popup = document.createElement('div');
+    popup.className = 'video-popup';
+    popup.innerHTML = `
+    <div class="video-popup-overlay"></div>
+    <div class="video-popup-content">
+      <div class="video-popup-header">
+        <h3>Просмотр видео: ${filename}</h3>
+        <button class="close-btn" onclick="this.closest('.video-popup').remove()">×</button>
+      </div>
+      <div class="video-container">
+        <video controls autoplay>
+          <source src="${videoUrl}" type="video/mp4">
+          Ваш браузер не поддерживает видео тег.
+        </video>
+      </div>
+    </div>
+  `;
+
+    // Добавляем попап на страницу
+    document.body.appendChild(popup);
+
+    // Закрытие по клику на оверлей
+    const overlay = popup.querySelector('.video-popup-overlay');
+    overlay?.addEventListener('click', () => {
+      popup.remove();
+    });
+
+    // Закрытие по ESC
+    const closeOnEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        popup.remove();
+        document.removeEventListener('keydown', closeOnEsc);
+      }
+    };
+    document.addEventListener('keydown', closeOnEsc);
   }
 
   // Удаление видео
