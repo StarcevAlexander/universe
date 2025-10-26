@@ -1,4 +1,4 @@
-name: Deploy to VM
+name: Deploy Go + Angular App
 
 on:
   push:
@@ -12,33 +12,65 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: List files (debug)
-        run: ls -la
-
-      - name: Setup Node.js
+      - name: Setup Node.js for Angular
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: './frontend/package-lock.json'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install Angular dependencies
+        run: cd frontend && npm install
 
-      - name: Build project
-        run: npm run build
+      - name: Build Angular frontend
+        run: cd frontend && npm run build:prod
 
-      - name: Check build files
-        run: |
-          echo "Checking build directory:"
-          ls -la build/ || echo "No build directory found"
-          echo "Current directory structure:"
-          find . -type f -name "*.html" -o -name "*.js" -o -name "*.css" | head -20
-
-      - name: Deploy via SCP
-        uses: appleboy/scp-action@v0.1.3
+      - name: Setup Go
+        uses: actions/setup-go@v4
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USERNAME }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          source: "."
-          target: "/var/www/your-app"
-          strip_components: 0
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: './backend/go.sum'
+
+      - name: Build Go backend
+        run: |
+          cd backend
+          go mod download
+          go build -o app main.go
+
+      - name: Show build results
+        run: |
+          echo "=== Frontend build ==="
+          ls -la frontend/dist/
+          echo "=== Backend build ==="
+          ls -la backend/
+
+      - name: Setup SSH and deploy
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/vm_key
+          chmod 600 ~/.ssh/vm_key
+          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
+          
+          # Создаем папку на сервере
+          ssh -i ~/.ssh/vm_key ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} "mkdir -p /var/www/your-app"
+          
+          # Копируем фронтенд
+          scp -i ~/.ssh/vm_key -r frontend/dist/* ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:/var/www/your-app/
+          
+          # Копируем бэкенд
+          scp -i ~/.ssh/vm_key backend/app ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:/var/www/your-app/
+          scp -i ~/.ssh/vm_key backend/go.mod ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:/var/www/your-app/
+          scp -i ~/.ssh/vm_key backend/go.sum ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:/var/www/your-app/
+
+      - name: Start application on server
+        run: |
+          ssh -i ~/.ssh/vm_key ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} "
+            cd /var/www/your-app
+            # Останавливаем предыдущую версию если запущена
+            pkill app || true
+            # Запускаем новую версию
+            ./app &
+            disown
+            echo 'Application deployed and started'
+          "
