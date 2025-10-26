@@ -23,20 +23,20 @@ jobs:
           cd frontend
           npm install
           npm run build:prod
-          echo "=== Built files location ==="
-          ls -la dist/
+          echo "=== Angular build files ==="
+          ls -la dist/browser/
 
-      - name: Deploy to server
+      - name: Deploy Angular files
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
           chmod 600 ~/.ssh/key
           
-          echo "=== Deploying from correct path ==="
-          # ПРАВИЛЬНЫЙ ПУТЬ: frontend/dist/
+          echo "Deploying from frontend/dist/browser/"
+          # ПРАВИЛЬНЫЙ ПУТЬ: frontend/dist/browser/
           scp -i ~/.ssh/key \
               -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
-              -r frontend/dist/* deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
+              -r frontend/dist/browser/* deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
           
-          echo "🌐 Deployment completed! Visit: http://${{ secrets.VM_HOST }}/"
+          echo "🎉 Angular app deployed! Visit: http://${{ secrets.VM_HOST }}/"
