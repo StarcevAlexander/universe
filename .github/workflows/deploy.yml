@@ -1,11 +1,13 @@
-name: Deploy to VM
+name: Build Application
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,33 +24,22 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Build frontend
+      - name: Build Frontend
         run: |
           cd frontend
           npm install
-          npm run build:prod
+          npm run build
+          echo "✅ Frontend built successfully!"
 
-      - name: Build backend
+      - name: Build Backend
         run: |
           cd backend
           go mod download
           go build -o app
+          echo "✅ Backend built successfully!"
 
-      - name: Deploy to VM
-        uses: appleboy/scp-action@v0.1.3
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USERNAME }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          source: "frontend/dist/browser/,backend/app,backend/video/"
-          target: "/opt/your-app/"
-
-      - name: Restart service on VM
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USERNAME }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          script: |
-            cd /opt/your-app
-            sudo systemctl restart your-app.service
+      - name: List build results
+        run: |
+          echo "=== Build Results ==="
+          ls -la frontend/dist/
+          ls -la backend/app
