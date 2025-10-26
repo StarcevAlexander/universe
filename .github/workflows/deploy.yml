@@ -1,12 +1,14 @@
-name: Test Deployment
+name: Deploy with Web Server
 
 on: workflow_dispatch
 
 jobs:
-  test:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Test deployment
+      - uses: actions/checkout@v4
+
+      - name: Deploy and setup web server
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
@@ -17,38 +19,62 @@ jobs:
           <!DOCTYPE html>
           <html>
           <head>
-              <title>Deployment Success!</title>
+              <title>My App</title>
               <style>
                   body { 
                       font-family: Arial, sans-serif; 
-                      margin: 40px;
+                      margin: 0; padding: 40px;
                       background: linear-gradient(135deg, #667eea, #764ba2);
-                      color: white;
-                      text-align: center;
+                      color: white; text-align: center;
+                      min-height: 100vh;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
                   }
                   .container {
                       background: rgba(255,255,255,0.1);
-                      padding: 40px;
-                      border-radius: 10px;
+                      padding: 40px; border-radius: 15px;
                       backdrop-filter: blur(10px);
-                      display: inline-block;
                   }
               </style>
           </head>
           <body>
               <div class="container">
-                  <h1>🚀 Success!</h1>
-                  <p>GitHub Actions deployed this file</p>
-                  <p>Time: $(date)</p>
+                  <h1>🚀 My Application</h1>
+                  <p>Successfully deployed via GitHub Actions!</p>
+                  <p>Server: 95.163.229.106</p>
               </div>
           </body>
           </html>
           EOF
           
           # Копируем на сервер
-          scp -i ~/.ssh/key -o StrictHostKeyChecking=no index.html deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
+          scp -i ~/.ssh/key index.html deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
           
-          # Проверяем
-          ssh -i ~/.ssh/key deploy@${{ secrets.VM_HOST }} "ls -la /var/www/your-app/"
+          # Устанавливаем и настраиваем nginx на сервере
+          ssh -i ~/.ssh/key deploy@${{ secrets.VM_HOST }} "
+            sudo apt update && sudo apt install -y nginx
           
-          echo "✅ Deployment successful! Check http://95.163.229.106/"
+            # Создаем конфиг nginx
+            sudo tee /etc/nginx/sites-available/your-app > /dev/null << 'NGINX_CONFIG'
+            server {
+                listen 80;
+                server_name _;
+                root /var/www/your-app;
+                index index.html;
+          
+                location / {
+                    try_files \$uri \$uri/ =404;
+                }
+            }
+            NGINX_CONFIG
+          
+            # Активируем сайт
+            sudo ln -sf /etc/nginx/sites-available/your-app /etc/nginx/sites-enabled/
+            sudo rm -f /etc/nginx/sites-enabled/default
+            sudo nginx -t && sudo systemctl restart nginx
+            sudo systemctl enable nginx
+            echo 'Web server configured!'
+          "
+          
+          echo "🌐 Website should be available at http://95.163.229.106/"
