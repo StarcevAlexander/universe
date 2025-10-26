@@ -24,13 +24,13 @@ import (
 )
 
 const (
-    SMTPHost     = "smtp.yandex.ru"
-    SMTPPort     = "587"
-    SMTPUsername = "79140050089@yandex.ru"
-    SMTPPassword = "qoskpuzbchyqught"
-    ToEmail      = "79140050089@yandex.ru"
-    UploadDir    = "video"
-    DBConnection = "myuser:mypassword@tcp(localhost:3306)/myapp?charset=utf8mb4"
+	SMTPHost     = "smtp.yandex.ru"
+	SMTPPort     = "587"
+	SMTPUsername = "79140050089@yandex.ru"
+	SMTPPassword = "qoskpuzbchyqught"
+	ToEmail      = "79140050089@yandex.ru"
+	UploadDir    = "video"
+	DBConnection = "myuser:mypassword@tcp(localhost:3306)/myapp?charset=utf8mb4"
 )
 
 type User struct {
@@ -118,42 +118,42 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func initDB() {
-    db, err := sql.Open("mysql", DBConnection)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer db.Close()
+	db, err := sql.Open("mysql", DBConnection)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 
-    // Проверяем подключение
-    err = db.Ping()
-    if err != nil {
-        log.Fatal("Не удалось подключиться к БД:", err)
-    }
+	// Проверяем подключение
+	err = db.Ping()
+	if err != nil {
+		log.Fatal("Не удалось подключиться к БД:", err)
+	}
 
-    // Создаем таблицу если не существует
-    _, err = db.Exec(`
+	// Создаем таблицу если не существует
+	_, err = db.Exec(`
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `)
-    if err != nil {
-        log.Fatal("Не удалось создать таблицу:", err)
-    }
+	if err != nil {
+		log.Fatal("Не удалось создать таблицу:", err)
+	}
 
-    // Добавляем тестовые данные если таблица пустая
-    var count int
-    db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
-    if count == 0 {
-        _, err = db.Exec(`INSERT INTO users (name) VALUES ('Алексей'), ('Мария')`)
-        if err != nil {
-            log.Println("Не удалось вставить тестовые данные:", err)
-        } else {
-            log.Println("Тестовые данные добавлены в MySQL.")
-        }
-    }
+	// Добавляем тестовые данные если таблица пустая
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+	if count == 0 {
+		_, err = db.Exec(`INSERT INTO users (name) VALUES ('Алексей'), ('Мария')`)
+		if err != nil {
+			log.Println("Не удалось вставить тестовые данные:", err)
+		} else {
+			log.Println("Тестовые данные добавлены в MySQL.")
+		}
+	}
 
-    log.Println("✅ База данных инициализирована успешно")
+	log.Println("✅ База данных инициализирована успешно")
 }
 
 func main() {
@@ -219,7 +219,7 @@ func uploadCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-err := r.ParseMultipartForm(100 << 20) // 100 MB
+	err := r.ParseMultipartForm(100 << 20) // 100 MB
 	if err != nil {
 		http.Error(w, "Слишком большой файл или ошибка загрузки", http.StatusBadRequest)
 		return
@@ -579,8 +579,12 @@ func listVideosHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	files, err := os.ReadDir(UploadDir)
+	// АБСОЛЮТНЫЙ путь к папке video
+	videoDir := "/var/www/your-app/video"
+
+	files, err := os.ReadDir(videoDir)
 	if err != nil {
+		log.Printf("Ошибка чтения папки %s: %v", videoDir, err)
 		http.Error(w, "Ошибка чтения папки с видео", http.StatusInternalServerError)
 		return
 	}
@@ -625,15 +629,18 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath := filepath.Join(UploadDir, filename)
+	// АБСОЛЮТНЫЙ путь к файлу
+	filePath := filepath.Join("/var/www/your-app/video", filename)
 
 	// Проверяем существование файла
 	fileInfo, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
+		log.Printf("Файл не найден: %s", filePath)
 		http.Error(w, "Файл не найден", http.StatusNotFound)
 		return
 	}
 	if err != nil {
+		log.Printf("Ошибка доступа к файлу %s: %v", filePath, err)
 		http.Error(w, "Ошибка доступа к файлу", http.StatusInternalServerError)
 		return
 	}
@@ -653,6 +660,7 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 	// Открываем файл для чтения
 	file, err := os.Open(filePath)
 	if err != nil {
+		log.Printf("Не удалось открыть файл %s: %v", filePath, err)
 		http.Error(w, "Не удалось открыть файл", http.StatusInternalServerError)
 		return
 	}
@@ -673,7 +681,6 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
 
 	// Используем ServeContent вместо ServeFile для лучшей поддержки стриминга
-	// ServeContent автоматически обрабатывает Range-запросы, If-Modified-Since и т.д.
 	http.ServeContent(w, r, filename, fileInfo.ModTime(), file)
 }
 
@@ -729,7 +736,7 @@ func uploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Создаем уникальное имя файла
 	filename := fmt.Sprintf("%d_%s%s", time.Now().Unix(), generateRandomString(8), ext)
-	filePath := filepath.Join(UploadDir, filename)
+	filePath := filepath.Join("/var/www/your-app/video", filename)
 
 	// Создаем файл на сервере
 	dst, err := os.Create(filePath)
@@ -775,7 +782,7 @@ func deleteVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := strings.TrimPrefix(r.URL.Path, "/delete-video/")
+	filename := strings.TrimPrefix(r.URL.Path, "/api/delete-video/")
 	if filename == "" {
 		http.Error(w, "Не указано имя файла", http.StatusBadRequest)
 		return
@@ -787,16 +794,19 @@ func deleteVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath := filepath.Join(UploadDir, filename)
+	// АБСОЛЮТНЫЙ путь к файлу
+	filePath := filepath.Join("/var/www/your-app/video", filename)
 
 	// Проверяем существование файла
 	fileInfo, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
+		log.Printf("Файл не найден для удаления: %s", filePath)
 		http.Error(w, "Файл не найден", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, "Ошибка доступа к файлу: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("Ошибка доступа к файлу %s: %v", filePath, err)
+		http.Error(w, "Ошибка доступа к файлу", http.StatusInternalServerError)
 		return
 	}
 
@@ -815,7 +825,8 @@ func deleteVideoHandler(w http.ResponseWriter, r *http.Request) {
 	// Удаляем файл
 	err = os.Remove(filePath)
 	if err != nil {
-		http.Error(w, "Ошибка удаления файла: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("Ошибка удаления файла %s: %v", filePath, err)
+		http.Error(w, "Ошибка удаления файла", http.StatusInternalServerError)
 		return
 	}
 
