@@ -1,4 +1,4 @@
-import {Component, OnInit, signal} from '@angular/core';
+import {Component, OnInit} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {NgForOf, NgIf} from '@angular/common';
 
@@ -118,7 +118,7 @@ export class App implements OnInit {
 
   // Просмотр видео
   viewVideo(filename: string) {
-    const videoUrl = `/video/${filename}`; // Используем прямой путь к видео
+    const videoUrl = `/api/video/${filename}`; // Используем API путь
 
     // Создаем попап элемент
     const popup = document.createElement('div');
@@ -127,35 +127,114 @@ export class App implements OnInit {
     <div class="video-popup-overlay"></div>
     <div class="video-popup-content">
       <div class="video-popup-header">
-        <h3>Просмотр видео: ${filename}</h3>
-        <button class="close-btn" onclick="this.closest('.video-popup').remove()">×</button>
+        <h3>${filename}</h3>
+        <button class="close-btn">×</button>
       </div>
       <div class="video-container">
-        <video controls autoplay>
+        <video controls autoplay preload="metadata" playsinline>
           <source src="${videoUrl}" type="video/mp4">
           Ваш браузер не поддерживает видео тег.
         </video>
+        <div class="video-loading">Загрузка видео...</div>
+        <div class="video-error" style="display: none;">
+          Ошибка загрузки видео. Попробуйте позже.
+        </div>
+      </div>
+      <div class="video-info">
+        <div class="video-stats">
+          <span>📊 Загрузка: <span class="load-status">0%</span></span>
+          <span>⏱️ Длительность: <span class="duration-status">--:--</span></span>
+        </div>
       </div>
     </div>
   `;
 
     // Добавляем попап на страницу
     document.body.appendChild(popup);
+    document.body.style.overflow = 'hidden'; // Блокируем скролл страницы
+
+    const video = popup.querySelector('video') as HTMLVideoElement;
+    const closeBtn = popup.querySelector('.close-btn') as HTMLButtonElement;
+    const overlay = popup.querySelector('.video-popup-overlay') as HTMLDivElement;
+    const loadingEl = popup.querySelector('.video-loading') as HTMLDivElement;
+    const errorEl = popup.querySelector('.video-error') as HTMLDivElement;
+    const loadStatus = popup.querySelector('.load-status') as HTMLSpanElement;
+    const durationStatus = popup.querySelector('.duration-status') as HTMLSpanElement;
+
+    // Обработчики событий видео
+    if (video) {
+      video.addEventListener('loadstart', () => {
+        loadingEl.style.display = 'block';
+      });
+
+      video.addEventListener('loadeddata', () => {
+        loadingEl.style.display = 'none';
+      });
+
+      video.addEventListener('progress', () => {
+        if (video.buffered.length > 0) {
+          const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+          const duration = video.duration;
+          if (duration > 0) {
+            const percent = (bufferedEnd / duration * 100).toFixed(1);
+            loadStatus.textContent = `${percent}%`;
+          }
+        }
+      });
+
+      video.addEventListener('loadedmetadata', () => {
+        const duration = video.duration;
+        if (duration && isFinite(duration)) {
+          const minutes = Math.floor(duration / 60);
+          const seconds = Math.floor(duration % 60);
+          durationStatus.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+      });
+
+      video.addEventListener('error', () => {
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        console.error('Ошибка загрузки видео:', video.error);
+      });
+
+      video.addEventListener('canplaythrough', () => {
+        loadingEl.style.display = 'none';
+      });
+
+      // Автоматический фокус на видео для управления с клавиатуры
+      setTimeout(() => video.focus(), 100);
+    }
+
+    // Функция закрытия попапа
+    const closePopup = () => {
+      if (video) {
+        video.pause();
+        video.src = ''; // Освобождаем ресурсы
+      }
+      popup.remove();
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', closeOnEsc);
+    };
+
+    // Закрытие по клику на кнопку
+    closeBtn.addEventListener('click', closePopup);
 
     // Закрытие по клику на оверлей
-    const overlay = popup.querySelector('.video-popup-overlay');
-    overlay?.addEventListener('click', () => {
-      popup.remove();
-    });
+    overlay.addEventListener('click', closePopup);
 
     // Закрытие по ESC
     const closeOnEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        popup.remove();
-        document.removeEventListener('keydown', closeOnEsc);
+        closePopup();
       }
     };
     document.addEventListener('keydown', closeOnEsc);
+
+    // Предотвращаем закрытие при клике на само видео
+    const videoContent = popup.querySelector('.video-popup-content') as HTMLDivElement;
+    videoContent.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
   }
 
   // Удаление видео

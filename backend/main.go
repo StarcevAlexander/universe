@@ -27,7 +27,7 @@ const (
 	SMTPHost     = "smtp.yandex.ru"
 	SMTPPort     = "587"
 	SMTPUsername = "alastaro@yandex.ru"
-	SMTPPassword = "79e4c955274f6f52cf51e067032d8aae"
+	SMTPPassword = "kmgvvlmovsskkowg"
 	ToEmail      = "79140050089@yandex.ru"
 	UploadDir    = "video"
 	DBConnection = "myuser:mypassword@tcp(localhost:3306)/myapp?charset=utf8mb4"
@@ -160,9 +160,9 @@ func main() {
 	if err := os.MkdirAll(UploadDir, 0755); err != nil {
 		log.Printf("Ошибка создания папки %s: %v", UploadDir, err)
 	}
-	initDB()
+	//initDB()
 
-	go startDailyEmailScheduler()
+	//go startDailyEmailScheduler()
 
 	// API-эндпоинты
 	http.HandleFunc("/api/users", func(w http.ResponseWriter, r *http.Request) {
@@ -622,8 +622,18 @@ func listVideosHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(videos)
 }
 
-// serveVideoHandler отдает видео файл
+// serveVideoHandler отдает видео файл с поддержкой потоковой передачи
 func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
+	// Разрешаем CORS для видео запросов
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Range")
+
+	// Обрабатываем preflight OPTIONS запрос
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "Метод не разрешён", http.StatusMethodNotAllowed)
 		return
@@ -669,7 +679,7 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Открываем файл для чтения
+	// Открываем файл
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Printf("Не удалось открыть файл %s: %v", filePath, err)
@@ -678,7 +688,10 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Устанавливаем правильный Content-Type
+	// Получаем размер файла
+	fileSize := fileInfo.Size()
+
+	// Устанавливаем правильные заголовки
 	ext := strings.ToLower(filepath.Ext(filename))
 	contentType := getContentType(ext)
 	if contentType != "" {
@@ -687,13 +700,87 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "video/mp4") // fallback
 	}
 
-	// Устанавливаем заголовки для правильной работы в браузере
+	// Важные заголовки для потоковой передачи
 	w.Header().Set("Accept-Ranges", "bytes")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
 
-	// Используем ServeContent вместо ServeFile для лучшей поддержки стриминга
-	http.ServeContent(w, r, filename, fileInfo.ModTime(), file)
+	// Обрабатываем Range запрос (для перемотки и докачки)
+	rangeHeader := r.Header.Get("Range")
+	if rangeHeader == "" {
+		// Если Range не указан - отдаем весь файл
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", fileSize))
+		http.ServeContent(w, r, filename, fileInfo.ModTime(), file)
+		return
+	}
+
+	// Парсим Range заголовок
+	var start, end int64
+	if strings.HasPrefix(rangeHeader, "bytes=") {
+		rangeStr := strings.TrimPrefix(rangeHeader, "bytes=")
+		parts := strings.Split(rangeStr, "-")
+
+		if len(parts) == 2 {
+			start, _ = strconv.ParseInt(parts[0], 10, 64)
+			end, _ = strconv.ParseInt(parts[1], 10, 64)
+		} else if len(parts) == 1 && parts[0] != "" {
+			start, _ = strconv.ParseInt(parts[0], 10, 64)
+			end = fileSize - 1
+		}
+
+		// Корректируем значения
+		if end == 0 || end >= fileSize {
+			end = fileSize - 1
+		}
+		if start < 0 {
+			start = 0
+		}
+		if start > end {
+			http.Error(w, "Invalid range", http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+	}
+
+	// Устанавливаем заголовки для частичного контента
+	contentLength := end - start + 1
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", contentLength))
+	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fileSize))
+	w.WriteHeader(http.StatusPartialContent)
+
+	// Перемещаемся к нужной позиции в файле
+	_, err = file.Seek(start, 0)
+	if err != nil {
+		log.Printf("Ошибка seek файла: %v", err)
+		return
+	}
+
+	// Отправляем данные чанками (кусками)
+	buffer := make([]byte, 64*1024) // 64KB chunks
+	remaining := contentLength
+
+	for remaining > 0 {
+		chunkSize := int64(len(buffer))
+		if chunkSize > remaining {
+			chunkSize = remaining
+		}
+
+		n, err := file.Read(buffer[:chunkSize])
+		if err != nil && err != io.EOF {
+			log.Printf("Ошибка чтения файла: %v", err)
+			break
+		}
+
+		if n == 0 {
+			break
+		}
+
+		_, err = w.Write(buffer[:n])
+		if err != nil {
+			log.Printf("Ошибка отправки данных: %v", err)
+			break
+		}
+
+		remaining -= int64(n)
+	}
 }
 
 // uploadVideoHandler обрабатывает загрузку видео
