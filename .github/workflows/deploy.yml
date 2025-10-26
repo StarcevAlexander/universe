@@ -1,4 +1,4 @@
-name: Deploy Go + Angular App
+name: Deploy Simple
 
 on:
   push:
@@ -7,94 +7,27 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Debug - Show repository structure
-        run: |
-          echo "=== Repository Structure ==="
-          find . -type f -name "*.go" -o -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "package.json" | head -20
-          echo "=== Frontend files ==="
-          ls -la frontend/ || echo "No frontend directory"
-          echo "=== Backend files ==="
-          ls -la backend/ || echo "No backend directory"
-
-      - name: Setup Node.js for Angular
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install and build Angular frontend
-        run: |
-          cd frontend
-          npm install
-          npm run build:prod
-          echo "=== Built frontend files ==="
-          ls -la dist/
-
-      - name: Setup Go for backend
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-
-      - name: Build Go backend
-        run: |
-          cd backend
-          go mod download
-          GOOS=linux GOARCH=amd64 go build -o app main.go
-          echo "=== Built backend binary ==="
-          ls -la
-
-      - name: Prepare deployment files
-        run: |
-          # Создаем временную папку для деплоя
-          mkdir -p deploy/static
-          # Копируем фронтенд
-          cp -r frontend/dist/* deploy/static/ 2>/dev/null || echo "No frontend files to copy"
-          # Копируем бэкенд
-          cp backend/app deploy/ 2>/dev/null || echo "No backend binary to copy"
-          cp backend/go.mod deploy/ 2>/dev/null || echo "No go.mod to copy"
-          cp backend/go.sum deploy/ 2>/dev/null || echo "No go.sum to copy"
-          
-          echo "=== Files ready for deployment ==="
-          ls -la deploy/
-          ls -la deploy/static/ || echo "No static directory"
-
-      - name: Setup SSH and deploy
-        run: |
-          # Настраиваем SSH
-          mkdir -p ~/.ssh
-          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/vm_key
-          chmod 600 ~/.ssh/vm_key
-          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
-          
-          # Создаем папку на сервере
-          echo "Creating directory on server..."
-          ssh -i ~/.ssh/vm_key ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} "mkdir -p /var/www/your-app"
-          
-          # Копируем файлы на сервер используя tar через ssh
-          echo "Deploying files..."
-          cd deploy
-          tar cz . | ssh -i ~/.ssh/vm_key ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} "cd /var/www/your-app && tar xz"
-          
-          # Даем права на выполнение бинарнику
-          ssh -i ~/.ssh/vm_key ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} "chmod +x /var/www/your-app/app"
-          
-          echo "Deployment completed!"
-
-      - name: Start application on server
-        run: |
-          # Запускаем приложение на сервере
-          ssh -i ~/.ssh/vm_key ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} "
-            cd /var/www/your-app
-            # Останавливаем предыдущую версию
-            pkill app || true
-            # Запускаем новую версию в фоне
-            nohup ./app > app.log 2>&1 &
-            echo 'Application started!'
-            sleep 2
-            echo 'Checking if app is running:'
-            ps aux | grep app | grep -v grep
-          "
+    - uses: actions/checkout@v4
+      
+    - name: Build Angular
+      run: |
+        cd frontend
+        npm install
+        npm run build:prod
+        echo "Frontend built successfully"
+        ls -la dist/
+      
+    - name: Deploy using direct SSH commands
+      run: |
+        # Сохраняем SSH ключ
+        mkdir -p ~/.ssh
+        echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/vm_key
+        chmod 600 ~/.ssh/vm_key
+        
+        # Копируем фронтенд на сервер
+        echo "Copying frontend files..."
+        scp -i ~/.ssh/vm_key -o StrictHostKeyChecking=no -r frontend/dist/* ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:/var/www/your-app/
+        
+        echo "Deployment completed!"
