@@ -1,18 +1,9 @@
-name: Simple Deploy
+name: Deploy with Password
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # ← Добавьте эту строку для ручного запуска
-    inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'production'
-        type: choice
-        options:
-          - production
-          - staging
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -21,22 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: List all files
-        run: find . -type f | head -20
-
-      - name: Simple file copy test
+      - name: Install sshpass
         run: |
-          # Создаем тестовый файл
-          echo "TEST FILE" > test.txt
-          echo "<html><body><h1>Works!</h1></body></html>" > index.html
-          
-          # Настраиваем SSH
-          mkdir -p ~/.ssh
-          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/vm_key
-          chmod 600 ~/.ssh/vm_key
-          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
-          
-          # Копируем тестовые файлы
-          scp -i ~/.ssh/vm_key test.txt index.html ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:/var/www/your-app/
-          
-          echo "Basic file copy worked!"
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Deploy with password
+        run: |
+          echo "<html><body><h1>SUCCESS!</h1></body></html>" > test.html
+          sshpass -p '${{ secrets.VM_PASSWORD }}' scp -o StrictHostKeyChecking=no test.html root@${{ secrets.VM_HOST }}:/var/www/your-app/
+          echo "File deployed successfully!"
