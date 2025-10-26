@@ -627,7 +627,7 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 	// Разрешаем CORS для видео запросов
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Range")
+	w.Header().Set("Access-Control-Allow-Headers", "Range, Content-Type")
 
 	// Обрабатываем preflight OPTIONS запрос
 	if r.Method == http.MethodOptions {
@@ -639,7 +639,7 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := strings.TrimPrefix(r.URL.Path, "/video/")
+	filename := strings.TrimPrefix(r.URL.Path, "/api/video/")
 	if filename == "" {
 		http.Error(w, "Не указано имя файла", http.StatusBadRequest)
 		return
@@ -703,11 +703,13 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 	// Важные заголовки для потоковой передачи
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
+	w.Header().Set("Cache-Control", "public, max-age=3600")
 
 	// Обрабатываем Range запрос (для перемотки и докачки)
 	rangeHeader := r.Header.Get("Range")
+
+	// Если Range не указан - отдаем весь файл
 	if rangeHeader == "" {
-		// Если Range не указан - отдаем весь файл
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", fileSize))
 		http.ServeContent(w, r, filename, fileInfo.ModTime(), file)
 		return
@@ -715,33 +717,37 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Парсим Range заголовок
 	var start, end int64
-	if strings.HasPrefix(rangeHeader, "bytes=") {
-		rangeStr := strings.TrimPrefix(rangeHeader, "bytes=")
-		parts := strings.Split(rangeStr, "-")
+	ranges := strings.TrimPrefix(rangeHeader, "bytes=")
+	rangeParts := strings.Split(ranges, "-")
 
-		if len(parts) == 2 {
-			start, _ = strconv.ParseInt(parts[0], 10, 64)
-			end, _ = strconv.ParseInt(parts[1], 10, 64)
-		} else if len(parts) == 1 && parts[0] != "" {
-			start, _ = strconv.ParseInt(parts[0], 10, 64)
-			end = fileSize - 1
-		}
+	if len(rangeParts) == 2 {
+		start, _ = strconv.ParseInt(rangeParts[0], 10, 64)
+		end, _ = strconv.ParseInt(rangeParts[1], 10, 64)
 
-		// Корректируем значения
+		// Если end не указан или больше размера файла
 		if end == 0 || end >= fileSize {
 			end = fileSize - 1
 		}
-		if start < 0 {
-			start = 0
-		}
-		if start > end {
-			http.Error(w, "Invalid range", http.StatusRequestedRangeNotSatisfiable)
-			return
-		}
+	} else if len(rangeParts) == 1 && rangeParts[0] != "" {
+		// Только start указан
+		start, _ = strconv.ParseInt(rangeParts[0], 10, 64)
+		end = fileSize - 1
+	} else {
+		http.Error(w, "Invalid range header", http.StatusBadRequest)
+		return
 	}
 
-	// Устанавливаем заголовки для частичного контента
+	// Валидация диапазона
+	if start < 0 || end >= fileSize || start > end {
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", fileSize))
+		http.Error(w, "Requested Range Not Satisfiable", http.StatusRequestedRangeNotSatisfiable)
+		return
+	}
+
+	// Вычисляем длину контента
 	contentLength := end - start + 1
+
+	// Устанавливаем заголовки для частичного контента
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", contentLength))
 	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fileSize))
 	w.WriteHeader(http.StatusPartialContent)
@@ -753,7 +759,7 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Отправляем данные чанками (кусками)
+	// Отправляем данные чанками
 	buffer := make([]byte, 64*1024) // 64KB chunks
 	remaining := contentLength
 
