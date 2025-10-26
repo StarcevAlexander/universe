@@ -1,9 +1,6 @@
-name: Deploy Angular App
+name: Deploy via SSH
 
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+on: workflow_dispatch
 
 jobs:
   deploy:
@@ -13,31 +10,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install and build Angular
+      - name: Build Angular
         run: |
           cd frontend
           npm install
           npm run build:prod
-          echo "=== Built files ==="
-          find dist/ -type f -name "*.html" -o -name "*.js" | head -10
 
-      - name: Deploy with disabled host checking
+      - name: Deploy using tar over SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
           chmod 600 ~/.ssh/key
           
-          # Полностью отключаем проверку host key
-          echo "Deploying files..."
-          scp -i ~/.ssh/key \
+          # Используем tar через SSH - более надежно
+          cd frontend/dist/frontend/browser/
+          tar cz . | ssh -i ~/.ssh/key \
               -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
-              -o LogLevel=ERROR \
-              -r frontend/dist/frontend/browser/* deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
+              deploy@${{ secrets.VM_HOST }} "cd /var/www/your-app && tar xz"
           
-          echo "🌐 Deployment completed!"
+          echo "✅ Files deployed via SSH tar"
