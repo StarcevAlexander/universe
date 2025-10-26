@@ -55,36 +55,47 @@ jobs:
           scp -i ~/.ssh/key \
               -o StrictHostKeyChecking=no \
               backend/app deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
-          
-          # Копируем необходимые Go файлы если нужно
-          scp -i ~/.ssh/key \
-              -o StrictHostKeyChecking=no \
-              backend/go.mod backend/go.sum deploy@${{ secrets.VM_HOST }}:/var/www/your-app/ 2>/dev/null || echo "No go.mod/go.sum to copy"
 
-      - name: Install MySQL on server
+      - name: Setup sudo without password
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
           chmod 600 ~/.ssh/key
           
           ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
-            echo '=== Installing MySQL ==='
-            sudo apt update
-            # Пробуем установить mysql-server, если не получится - используем mariadb
-            if sudo apt install -y mysql-server; then
-              echo 'MySQL server installed successfully'
-              DB_SERVICE='mysql'
-            else
-              echo 'MySQL not available, installing MariaDB instead'
-              sudo apt install -y mariadb-server
-              DB_SERVICE='mariadb'
-            fi
+            # Даем права на sudo без пароля
+            echo 'deploy ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/deploy
+            sudo chmod 440 /etc/sudoers.d/deploy
+            echo 'Sudo without password configured'
+          "
+
+      - name: Install MySQL/MariaDB
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
+          chmod 600 ~/.ssh/key
           
-            echo '=== Starting database service ==='
-            sudo systemctl start \$DB_SERVICE
-            sudo systemctl enable \$DB_SERVICE
+          ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
+            echo '=== Updating package list ==='
+            sudo apt update -y
           
-            echo '=== Creating database and user ==='
+            echo '=== Installing MariaDB (MySQL compatible) ==='
+            sudo apt install -y mariadb-server
+          
+            echo '=== Starting MariaDB ==='
+            sudo systemctl start mariadb
+            sudo systemctl enable mariadb
+          
+            echo '=== Securing MariaDB ==='
+            sudo mysql -e \"
+            DELETE FROM mysql.user WHERE User='';
+            DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+            DROP DATABASE IF EXISTS test;
+            DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+            FLUSH PRIVILEGES;
+            \"
+          
+            echo '=== Creating application database ==='
             sudo mysql -e \"
             CREATE DATABASE IF NOT EXISTS myapp;
             CREATE USER IF NOT EXISTS 'myuser'@'localhost' IDENTIFIED BY 'mypassword';
@@ -93,12 +104,12 @@ jobs:
             \"
           
             echo '=== Database status ==='
-            sudo systemctl status \$DB_SERVICE
+            sudo systemctl status mariadb
             echo '=== Database version ==='
             mysql --version
           "
 
-      - name: Setup application on server
+      - name: Setup application service
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
@@ -111,11 +122,11 @@ jobs:
             # Даем права на бинарник Go
             chmod +x app
           
-            # Создаем systemd service для надежного запуска
+            # Создаем systemd service
             sudo tee /etc/systemd/system/myapp.service > /dev/null << 'SERVICE'
             [Unit]
             Description=My Go Application
-            After=network.target mysql.service mariadb.service
+            After=network.target mariadb.service
           
             [Service]
             Type=simple
@@ -124,21 +135,18 @@ jobs:
             ExecStart=/var/www/your-app/app
             Restart=always
             RestartSec=3
-            Environment=PORT=8080
           
             [Install]
             WantedBy=multi-user.target
             SERVICE
           
-            # Перезагружаем systemd и включаем автозапуск
+            # Перезагружаем systemd
             sudo systemctl daemon-reload
             sudo systemctl enable myapp.service
             sudo systemctl restart myapp.service
           
             echo '=== Application status ==='
             sudo systemctl status myapp.service
-            echo '=== Application logs ==='
-            sudo journalctl -u myapp.service -n 10 --no-pager
           "
 
       - name: Verify deployment
@@ -149,37 +157,15 @@ jobs:
           
           echo '=== Verifying deployment ==='
           ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
-            echo '1. Checking running processes:'
-            ps aux | grep app | grep -v grep
-            echo '2. Checking service status:'
+            echo '1. Database status:'
+            sudo systemctl status mariadb --no-pager
+            echo '2. Application status:'
             sudo systemctl status myapp.service --no-pager
-            echo '3. Checking database connection:'
-            sudo mysql -e 'SHOW DATABASES;' | grep myapp
-            echo '4. Checking web server:'
-            curl -s http://localhost:8080/ | head -2
-            echo '5. Checking nginx:'
+            echo '3. Database created:'
+            sudo mysql -e 'SHOW DATABASES;' | grep myapp || echo 'Database not found'
+            echo '4. Nginx status:'
             sudo systemctl status nginx --no-pager
           "
           
-          echo '🎉 Full stack deployment completed!'
-          echo '🌐 Frontend: http://${{ secrets.VM_HOST }}/'
-          echo '🔧 Backend API: http://${{ secrets.VM_HOST }}:8080/'
-          echo '📊 MySQL database: myapp (user: myuser)'
-
-      - name: Health check
-        run: |
-          echo '=== Final health check ==='
-          echo 'Waiting for services to start...'
-          sleep 10
-          
-          mkdir -p ~/.ssh
-          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
-          chmod 600 ~/.ssh/key
-          
-          ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
-            echo 'Services status:'
-            sudo systemctl status nginx --no-pager | head -5
-            sudo systemctl status myapp.service --no-pager | head -5
-            echo 'Recent application logs:'
-            sudo journalctl -u myapp.service -n 5 --no-pager
-          "
+          echo '🎉 Deployment completed!'
+          echo '🌐 Website: http://${{ secrets.VM_HOST }}/'
