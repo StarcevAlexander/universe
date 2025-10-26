@@ -1,41 +1,22 @@
-name: Deploy Angular App
+name: Test SSH Connection
 
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+on: workflow_dispatch
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install and build Angular
-        run: |
-          cd frontend
-          npm install
-          npm run build:prod
-          echo "=== Built files ==="
-          ls -la dist/
-
-      - name: Deploy with rsync
+      - name: Test SSH setup
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
           chmod 600 ~/.ssh/key
           ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
           
-          # Используем rsync вместо scp
-          rsync -avz -e "ssh -i ~/.ssh/key -o StrictHostKeyChecking=no" \
-            --delete \
-            frontend/dist/frontend/browser/ deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
-          
-          echo "🎉 Deployment completed! Visit: http://${{ secrets.VM_HOST }}/"
+          echo "=== Testing connection ==="
+          ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
+            echo 'Connected successfully!'
+            whoami
+            pwd
+            ls -la /var/www/your-app/
+          "
