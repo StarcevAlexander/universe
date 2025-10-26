@@ -1,22 +1,43 @@
-name: Test SSH Connection
+name: Deploy Angular App
 
-on: workflow_dispatch
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  test:
+  deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Test SSH setup
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install and build Angular
+        run: |
+          cd frontend
+          npm install
+          npm run build:prod
+          echo "=== Built files ==="
+          find dist/ -type f -name "*.html" -o -name "*.js" | head -10
+
+      - name: Deploy with disabled host checking
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
           chmod 600 ~/.ssh/key
-          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
           
-          echo "=== Testing connection ==="
-          ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
-            echo 'Connected successfully!'
-            whoami
-            pwd
-            ls -la /var/www/your-app/
-          "
+          # Полностью отключаем проверку host key
+          echo "Deploying files..."
+          scp -i ~/.ssh/key \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o LogLevel=ERROR \
+              -r frontend/dist/frontend/browser/* deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
+          
+          echo "🌐 Deployment completed!"
