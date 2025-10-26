@@ -29,12 +29,22 @@ jobs:
       - name: Deploy to server
         run: |
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
           chmod 600 ~/.ssh/key
+          
+          # Добавляем хост в known_hosts
+          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          
+          echo "Testing SSH connection..."
+          ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "echo 'SSH connection successful'"
           
           echo "Deploying Angular app..."
           # Очищаем папку на сервере и копируем новую сборку
           ssh -i ~/.ssh/key deploy@${{ secrets.VM_HOST }} "rm -rf /var/www/your-app/*"
-          scp -i ~/.ssh/key -o StrictHostKeyChecking=no -r frontend/dist/* deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
+          
+          # Копируем файлы
+          scp -i ~/.ssh/key -o StrictHostKeyChecking=no -r frontend/dist/frontend/browser/* deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
           
           echo "🌐 Website deployed: http://${{ secrets.VM_HOST }}/"
