@@ -1,24 +1,54 @@
-name: Deploy with Password
+name: Test Deployment
 
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+on: workflow_dispatch
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install sshpass
+      - name: Test deployment
         run: |
-          sudo apt-get update
-          sudo apt-get install -y sshpass
-
-      - name: Deploy with password
-        run: |
-          echo "<html><body><h1>SUCCESS!</h1></body></html>" > test.html
-          sshpass -p '${{ secrets.VM_PASSWORD }}' scp -o StrictHostKeyChecking=no test.html root@${{ secrets.VM_HOST }}:/var/www/your-app/
-          echo "File deployed successfully!"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
+          chmod 600 ~/.ssh/key
+          
+          # Создаем тестовую страницу
+          cat > index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Deployment Success!</title>
+              <style>
+                  body { 
+                      font-family: Arial, sans-serif; 
+                      margin: 40px;
+                      background: linear-gradient(135deg, #667eea, #764ba2);
+                      color: white;
+                      text-align: center;
+                  }
+                  .container {
+                      background: rgba(255,255,255,0.1);
+                      padding: 40px;
+                      border-radius: 10px;
+                      backdrop-filter: blur(10px);
+                      display: inline-block;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🚀 Success!</h1>
+                  <p>GitHub Actions deployed this file</p>
+                  <p>Time: $(date)</p>
+              </div>
+          </body>
+          </html>
+          EOF
+          
+          # Копируем на сервер
+          scp -i ~/.ssh/key -o StrictHostKeyChecking=no index.html deploy@${{ secrets.VM_HOST }}:/var/www/your-app/
+          
+          # Проверяем
+          ssh -i ~/.ssh/key deploy@${{ secrets.VM_HOST }} "ls -la /var/www/your-app/"
+          
+          echo "✅ Deployment successful! Check http://95.163.229.106/"
