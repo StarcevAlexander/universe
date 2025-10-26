@@ -61,45 +61,125 @@ jobs:
               -o StrictHostKeyChecking=no \
               backend/go.mod backend/go.sum deploy@${{ secrets.VM_HOST }}:/var/www/your-app/ 2>/dev/null || echo "No go.mod/go.sum to copy"
 
-      - name: Setup server and start application
+      - name: Install MySQL on server
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
           chmod 600 ~/.ssh/key
           
-          ssh -i ~/.ssh/key \
-              -o StrictHostKeyChecking=no \
-              deploy@${{ secrets.VM_HOST }} "
+          ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
+            echo '=== Installing MySQL ==='
+            sudo apt update
+            # Пробуем установить mysql-server, если не получится - используем mariadb
+            if sudo apt install -y mysql-server; then
+              echo 'MySQL server installed successfully'
+              DB_SERVICE='mysql'
+            else
+              echo 'MySQL not available, installing MariaDB instead'
+              sudo apt install -y mariadb-server
+              DB_SERVICE='mariadb'
+            fi
           
-          # Устанавливаем MySQL
-          echo 'Installing MySQL...'
-          sudo apt update
-          sudo apt install -y mysql-server
+            echo '=== Starting database service ==='
+            sudo systemctl start \$DB_SERVICE
+            sudo systemctl enable \$DB_SERVICE
           
-          # Запускаем MySQL
-          sudo systemctl start mysql
-          sudo systemctl enable mysql
+            echo '=== Creating database and user ==='
+            sudo mysql -e \"
+            CREATE DATABASE IF NOT EXISTS myapp;
+            CREATE USER IF NOT EXISTS 'myuser'@'localhost' IDENTIFIED BY 'mypassword';
+            GRANT ALL PRIVILEGES ON myapp.* TO 'myuser'@'localhost';
+            FLUSH PRIVILEGES;
+            \"
           
-          # Настраиваем базу данных (замените на вашу конфигурацию)
-          sudo mysql -e \"
-          CREATE DATABASE IF NOT EXISTS myapp;
-          CREATE USER IF NOT EXISTS 'myuser'@'localhost' IDENTIFIED BY 'mypassword';
-          GRANT ALL PRIVILEGES ON myapp.* TO 'myuser'@'localhost';
-          FLUSH PRIVILEGES;
-          \"
+            echo '=== Database status ==='
+            sudo systemctl status \$DB_SERVICE
+            echo '=== Database version ==='
+            mysql --version
+          "
+
+      - name: Setup application on server
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
+          chmod 600 ~/.ssh/key
           
-          # Даем права на бинарник Go
-          cd /var/www/your-app
-          chmod +x app
+          ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
+            echo '=== Setting up application ==='
+            cd /var/www/your-app
           
-          # Останавливаем предыдущую версию если запущена
-          sudo pkill app || true
+            # Даем права на бинарник Go
+            chmod +x app
           
-          # Запускаем новую версию
-          nohup ./app > app.log 2>&1 &
+            # Создаем systemd service для надежного запуска
+            sudo tee /etc/systemd/system/myapp.service > /dev/null << 'SERVICE'
+            [Unit]
+            Description=My Go Application
+            After=network.target mysql.service mariadb.service
           
-          echo 'MySQL installed and application started!'
-          echo 'Check app logs: tail -f /var/www/your-app/app.log'
+            [Service]
+            Type=simple
+            User=deploy
+            WorkingDirectory=/var/www/your-app
+            ExecStart=/var/www/your-app/app
+            Restart=always
+            RestartSec=3
+            Environment=PORT=8080
+          
+            [Install]
+            WantedBy=multi-user.target
+            SERVICE
+          
+            # Перезагружаем systemd и включаем автозапуск
+            sudo systemctl daemon-reload
+            sudo systemctl enable myapp.service
+            sudo systemctl restart myapp.service
+          
+            echo '=== Application status ==='
+            sudo systemctl status myapp.service
+            echo '=== Application logs ==='
+            sudo journalctl -u myapp.service -n 10 --no-pager
+          "
+
+      - name: Verify deployment
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
+          chmod 600 ~/.ssh/key
+          
+          echo '=== Verifying deployment ==='
+          ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
+            echo '1. Checking running processes:'
+            ps aux | grep app | grep -v grep
+            echo '2. Checking service status:'
+            sudo systemctl status myapp.service --no-pager
+            echo '3. Checking database connection:'
+            sudo mysql -e 'SHOW DATABASES;' | grep myapp
+            echo '4. Checking web server:'
+            curl -s http://localhost:8080/ | head -2
+            echo '5. Checking nginx:'
+            sudo systemctl status nginx --no-pager
           "
           
-          echo "🎉 Full stack deployed! Frontend: http://${{ secrets.VM_HOST }}/"
+          echo '🎉 Full stack deployment completed!'
+          echo '🌐 Frontend: http://${{ secrets.VM_HOST }}/'
+          echo '🔧 Backend API: http://${{ secrets.VM_HOST }}:8080/'
+          echo '📊 MySQL database: myapp (user: myuser)'
+
+      - name: Health check
+        run: |
+          echo '=== Final health check ==='
+          echo 'Waiting for services to start...'
+          sleep 10
+          
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/key
+          chmod 600 ~/.ssh/key
+          
+          ssh -i ~/.ssh/key -o StrictHostKeyChecking=no deploy@${{ secrets.VM_HOST }} "
+            echo 'Services status:'
+            sudo systemctl status nginx --no-pager | head -5
+            sudo systemctl status myapp.service --no-pager | head -5
+            echo 'Recent application logs:'
+            sudo journalctl -u myapp.service -n 5 --no-pager
+          "
