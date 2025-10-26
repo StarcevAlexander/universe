@@ -507,11 +507,25 @@ func sendCSVByEmail() error {
 	msg.WriteString("\r\n")
 	msg.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
 
-	// Отправка
+	// Отправка с таймаутом
 	auth := smtp.PlainAuth("", SMTPUsername, SMTPPassword, SMTPHost)
-	err = smtp.SendMail(SMTPHost+":"+SMTPPort, auth, SMTPUsername, []string{ToEmail}, msg.Bytes())
-	if err != nil {
-		return fmt.Errorf("ошибка отправки почты: %v", err)
+
+	// Создаем канал для таймаута
+	done := make(chan error, 1)
+
+	go func() {
+		err = smtp.SendMail(SMTPHost+":"+SMTPPort, auth, SMTPUsername, []string{ToEmail}, msg.Bytes())
+		done <- err
+	}()
+
+	// Ждем с таймаутом 30 секунд
+	select {
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("ошибка отправки почты: %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		return fmt.Errorf("таймаут отправки почты: соединение заняло более 30 секунд")
 	}
 
 	log.Printf("Письмо с бэкапом отправлено: %s", subject)
