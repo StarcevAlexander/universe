@@ -175,6 +175,14 @@ func main() {
 			http.Error(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
 		}
 	})
+	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "ok",
+			"service":   "Go API",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+	})
 
 	http.HandleFunc("/api/upload-csv", uploadCSV)
 	http.HandleFunc("/api/export-csv", exportCSV)
@@ -433,93 +441,93 @@ func generateCSV() (*bytes.Buffer, error) {
 
 // sendCSVByEmail отправляет CSV файл по почте
 func sendCSVByEmail() error {
-    // Генерируем CSV
-    csvData, err := generateCSV()
-    if err != nil {
-        return fmt.Errorf("ошибка генерации CSV: %v", err)
-    }
+	// Генерируем CSV
+	csvData, err := generateCSV()
+	if err != nil {
+		return fmt.Errorf("ошибка генерации CSV: %v", err)
+	}
 
-    // Подсчитываем количество пользователей
-    db, err := sql.Open("mysql", DBConnection)
-    if err != nil {
-        return err
-    }
-    defer db.Close()
+	// Подсчитываем количество пользователей
+	db, err := sql.Open("mysql", DBConnection)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
 
-    var userCount int
-    db.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
+	var userCount int
+	db.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
 
-    // Формируем сообщение
-    currentDate := time.Now().Format("02.01.2006")
-    subject := fmt.Sprintf("Бэкап от %s (%d записей)", currentDate, userCount)
-    encodedSubject := mime.QEncoding.Encode("UTF-8", subject)
+	// Формируем сообщение
+	currentDate := time.Now().Format("02.01.2006")
+	subject := fmt.Sprintf("Бэкап от %s (%d записей)", currentDate, userCount)
+	encodedSubject := mime.QEncoding.Encode("UTF-8", subject)
 
-    body := fmt.Sprintf("Во вложении CSV файл с пользователями.\n\nСгенерировано: %s\nКоличество записей: %d",
-        time.Now().Format("2006-01-02 15:04:05"), userCount)
+	body := fmt.Sprintf("Во вложении CSV файл с пользователями.\n\nСгенерировано: %s\nКоличество записей: %d",
+		time.Now().Format("2006-01-02 15:04:05"), userCount)
 
-    // Создаем MIME сообщение
-    var msg bytes.Buffer
-    boundary := "boundary12345"
+	// Создаем MIME сообщение
+	var msg bytes.Buffer
+	boundary := "boundary12345"
 
-    msg.WriteString(fmt.Sprintf("From: %s\r\n", SMTPUsername))
-    msg.WriteString(fmt.Sprintf("To: %s\r\n", ToEmail))
-    msg.WriteString(fmt.Sprintf("Subject: %s\r\n", encodedSubject))
-    msg.WriteString("MIME-Version: 1.0\r\n")
-    msg.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%s\r\n", boundary))
-    msg.WriteString("\r\n")
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", SMTPUsername))
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", ToEmail))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", encodedSubject))
+	msg.WriteString("MIME-Version: 1.0\r\n")
+	msg.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%s\r\n", boundary))
+	msg.WriteString("\r\n")
 
-    // Текст письма
-    msg.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-    msg.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
-    msg.WriteString("Content-Transfer-Encoding: quoted-printable\r\n")
-    msg.WriteString("\r\n")
-    msg.WriteString(body + "\r\n")
+	// Текст письма
+	msg.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	msg.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+	msg.WriteString("Content-Transfer-Encoding: quoted-printable\r\n")
+	msg.WriteString("\r\n")
+	msg.WriteString(body + "\r\n")
 
-    // Вложение
-    filename := fmt.Sprintf("users_export_%s.csv", time.Now().Format("20060102"))
-    msg.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-    msg.WriteString("Content-Type: text/csv; charset=utf-8\r\n")
-    msg.WriteString("Content-Transfer-Encoding: base64\r\n")
-    msg.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=\"%s\"\r\n", filename))
-    msg.WriteString("\r\n")
+	// Вложение
+	filename := fmt.Sprintf("users_export_%s.csv", time.Now().Format("20060102"))
+	msg.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	msg.WriteString("Content-Type: text/csv; charset=utf-8\r\n")
+	msg.WriteString("Content-Transfer-Encoding: base64\r\n")
+	msg.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=\"%s\"\r\n", filename))
+	msg.WriteString("\r\n")
 
-    // Кодируем CSV в base64
-    encoded := base64.StdEncoding.EncodeToString(csvData.Bytes())
+	// Кодируем CSV в base64
+	encoded := base64.StdEncoding.EncodeToString(csvData.Bytes())
 
-    // Пишем base64 построчно
-    lineLength := 76
-    for i := 0; i < len(encoded); i += lineLength {
-        end := i + lineLength
-        if end > len(encoded) {
-            end = len(encoded)
-        }
-        msg.WriteString(encoded[i:end] + "\r\n")
-    }
+	// Пишем base64 построчно
+	lineLength := 76
+	for i := 0; i < len(encoded); i += lineLength {
+		end := i + lineLength
+		if end > len(encoded) {
+			end = len(encoded)
+		}
+		msg.WriteString(encoded[i:end] + "\r\n")
+	}
 
-    msg.WriteString("\r\n")
-    msg.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+	msg.WriteString("\r\n")
+	msg.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
 
-    // Отправка с таймаутом
-    auth := smtp.PlainAuth("", SMTPUsername, SMTPPassword, SMTPHost)
+	// Отправка с таймаутом
+	auth := smtp.PlainAuth("", SMTPUsername, SMTPPassword, SMTPHost)
 
-    done := make(chan error, 1)
+	done := make(chan error, 1)
 
-    go func() {
-        err = smtp.SendMail(SMTPHost+":"+SMTPPort, auth, SMTPUsername, []string{ToEmail}, msg.Bytes())
-        done <- err
-    }()
+	go func() {
+		err = smtp.SendMail(SMTPHost+":"+SMTPPort, auth, SMTPUsername, []string{ToEmail}, msg.Bytes())
+		done <- err
+	}()
 
-    // Таймаут 15 секунд
-    select {
-    case err := <-done:
-        if err != nil {
-            return fmt.Errorf("ошибка отправки почты: %v", err)
-        }
-        log.Printf("✅ Письмо с бэкапом отправлено: %s", subject)
-        return nil
-    case <-time.After(15 * time.Second):
-        return fmt.Errorf("таймаут: отправка почты заняла слишком много времени")
-    }
+	// Таймаут 15 секунд
+	select {
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("ошибка отправки почты: %v", err)
+		}
+		log.Printf("✅ Письмо с бэкапом отправлено: %s", subject)
+		return nil
+	case <-time.After(15 * time.Second):
+		return fmt.Errorf("таймаут: отправка почты заняла слишком много времени")
+	}
 }
 
 // sendCSVHandler обрабатывает запрос на отправку CSV по почте
