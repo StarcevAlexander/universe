@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Управление пользователями</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        .section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        button, input[type="file"] {
+            padding: 10px 16px;
+            font-size: 16px;
+            margin: 5px 0;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            color: #007bff;
+        }
+
+        .video-list {
+            margin-top: 15px;
+        }
+
+        .video-item {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .video-info {
+            flex-grow: 1;
+        }
+
+        .video-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .video-meta {
+            font-size: 14px;
+            color: #6c757d;
+        }
+
+        .video-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .video-actions button {
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+
+        .btn-view {
+            background: #28a745;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+        }
+
+        .btn-view:hover {
+            background: #218838;
+        }
+
+        .btn-delete:hover {
+            background: #c82333;
+        }
+
+        .video-player {
+            max-width: 100%;
+            max-height: 400px;
+            margin: 10px 0;
+        }
+
+        .no-videos {
+            text-align: center;
+            color: #6c757d;
+            font-style: italic;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+<h1>Экспорт и импорт пользователей</h1>
+
+<!-- Отправка по email -->
+<div class="section">
+    <h2>📧 Отправка CSV по почте</h2>
+    <p>Отправить CSV файл с пользователями на почту 79140050089@yandex.ru</p>
+    <button onclick="sendCSVByEmail()">Отправить по почте</button>
+    <div id="emailMessage"></div>
+</div>
+<!-- Просмотр данных -->
+<div class="section">
+
+    <h2>👁️ Просмотр данных из базы</h2>
+    <button onclick="loadData()">Обновить и показать данные</button>
+    <div id="dataContainer">
+        <p>Нажмите кнопку, чтобы загрузить данные.</p>
+    </div>
+</div>
+
+<!-- Экспорт -->
+<div class="section">
+    <h2>📥 Экспорт данных в CSV</h2>
+    <p>Скачайте текущие данные из базы в формате CSV (UTF-8 с разделителем <code>;</code>).</p>
+    <button onclick="exportCSV()">Скачать CSV</button>
+</div>
+
+<!-- Импорт -->
+<div class="section">
+    <h2>📤 Импорт данных из CSV</h2>
+    <p>Загрузите CSV-файл. Содержимое таблицы <code>users</code> будет <strong>полностью заменено</strong>.</p>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" id="csvFile" name="file" accept=".csv" required/>
+        <button type="submit">Загрузить и заменить</button>
+    </form>
+    <div id="uploadMessage"></div>
+</div>
+
+<!-- Загрузка видео -->
+<div class="section">
+    <h2>🎥 Загрузка видео</h2>
+    <p>Загрузите видео файлы (макс. 100MB). Поддерживаемые форматы: MP4, AVI, MOV, WMV, FLV, WebM, MKV</p>
+
+    <form id="uploadVideoForm" enctype="multipart/form-data">
+        <input type="file" id="videoFile" name="video" accept="video/*" required/>
+        <button type="submit">Загрузить видео</button>
+    </form>
+    <div id="videoUploadMessage"></div>
+</div>
+
+<!-- Список загруженных видео -->
+<div class="section">
+    <h2>📹 Загруженные видео</h2>
+    <button onclick="loadVideos()">Обновить список видео</button>
+    <div id="videosContainer">
+        <p>Нажмите кнопку, чтобы загрузить список видео.</p>
+    </div>
+</div>
+
+<script>
+    // Загрузка данных из /users и отображение в таблице
+    async function loadData() {
+        const container = document.getElementById('dataContainer');
+        container.innerHTML = '<p class="loading">Загрузка...</p>';
+
+        try {
+            const res = await fetch('/users');
+            if (!res.ok) throw new Error('Ошибка загрузки данных');
+            const users = await res.json();
+
+            if (users.length === 0) {
+                container.innerHTML = '<p>Нет данных в базе.</p>';
+                return;
+            }
+
+            let html = `<table><thead><tr><th>ID</th><th>Имя</th></tr></thead><tbody>`;
+            users.forEach(u => {
+                html += `<tr><td>${u.id}</td><td>${u.name}</td></tr>`;
+            });
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        } catch (err) {
+            container.innerHTML = `<p class="error">❌ ${err.message}</p>`;
+        }
+    }
+
+    // Экспорт
+    function exportCSV() {
+        const link = document.createElement('a');
+        link.href = '/export-csv';
+        link.download = 'users.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Импорт
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fileInput = document.getElementById('csvFile');
+        const msg = document.getElementById('uploadMessage');
+        const file = fileInput.files[0];
+
+        if (!file) {
+            msg.className = 'message error';
+            msg.textContent = 'Выберите файл';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        msg.className = 'message loading';
+        msg.textContent = 'Загрузка...';
+
+        try {
+            const res = await fetch('/upload-csv', {method: 'POST', body: formData});
+            const result = await res.json();
+
+            if (res.ok) {
+                msg.className = 'message success';
+                msg.textContent = `✅ Успех! Загружено строк: ${result.rows || 0}`;
+                fileInput.value = '';
+                loadData(); // автоматически обновить таблицу
+            } else {
+                msg.className = 'message error';
+                msg.textContent = `❌ Ошибка: ${result.message || 'Неизвестная ошибка'}`;
+            }
+        } catch (err) {
+            msg.className = 'message error';
+            msg.textContent = `❌ Сетевая ошибка: ${err.message}`;
+        }
+    });
+
+    // Отправка CSV по email
+    async function sendCSVByEmail() {
+        const msg = document.getElementById('emailMessage');
+        msg.className = 'message loading';
+        msg.textContent = 'Отправка...';
+
+        try {
+            const res = await fetch('/send-csv-email', {
+                method: 'POST'
+            });
+            const result = await res.json();
+
+            if (res.ok) {
+                msg.className = 'message success';
+                msg.textContent = '✅ CSV файл успешно отправлен на почту';
+            } else {
+                msg.className = 'message error';
+                msg.textContent = `❌ Ошибка: ${result.message || 'Неизвестная ошибка'}`;
+            }
+        } catch (err) {
+            msg.className = 'message error';
+            msg.textContent = `❌ Сетевая ошибка: ${err.message}`;
+        }
+    }
+
+    // Загрузка видео
+    document.getElementById('uploadVideoForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fileInput = document.getElementById('videoFile');
+        const msg = document.getElementById('videoUploadMessage');
+        const file = fileInput.files[0];
+
+        if (!file) {
+            msg.className = 'message error';
+            msg.textContent = 'Выберите видео файл';
+            return;
+        }
+
+        // Проверяем размер файла (100MB)
+        if (file.size > 100 * 1024 * 1024) {
+            msg.className = 'message error';
+            msg.textContent = 'Файл слишком большой (макс. 100MB)';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('video', file);
+
+        msg.className = 'message loading';
+        msg.textContent = 'Загрузка видео...';
+
+        try {
+            const res = await fetch('/upload-video', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await res.json();
+
+            if (res.ok) {
+                msg.className = 'message success';
+                msg.textContent = `✅ Видео успешно загружено: ${result.filename}`;
+                fileInput.value = '';
+                loadVideos(); // Обновляем список видео
+            } else {
+                msg.className = 'message error';
+                msg.textContent = `❌ Ошибка: ${result.message || 'Неизвестная ошибка'}`;
+            }
+        } catch (err) {
+            msg.className = 'message error';
+            msg.textContent = `❌ Сетевая ошибка: ${err.message}`;
+        }
+    });
+
+    // Загрузка списка видео
+    async function loadVideos() {
+        const container = document.getElementById('videosContainer');
+        container.innerHTML = '<p class="loading">Загрузка списка видео...</p>';
+
+        try {
+            const res = await fetch('/videos');
+            if (!res.ok) throw new Error('Ошибка загрузки списка видео');
+            const videos = await res.json();
+
+            if (videos.length === 0) {
+                container.innerHTML = '<p class="no-videos">Нет загруженных видео</p>';
+                return;
+            }
+
+            let html = '<div class="video-list">';
+            videos.forEach(video => {
+                const sizeMB = (video.size / (1024 * 1024)).toFixed(2);
+                html += `
+                <div class="video-item">
+                    <div class="video-info">
+                        <div class="video-name">${video.filename}</div>
+                        <div class="video-meta">
+                            Размер: ${sizeMB} MB |
+                            Загружено: ${video.uploaded_at}
+                        </div>
+                    </div>
+                    <div class="video-actions">
+                        <button class="btn-view" onclick="viewVideo('${video.filename}')">
+                            👁️ Смотреть
+                        </button>
+                        <button class="btn-delete" onclick="deleteVideo('${video.filename}')">
+                            🗑️ Удалить
+                        </button>
+                    </div>
+                </div>
+            `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        } catch (err) {
+            container.innerHTML = `<p class="error">❌ ${err.message}</p>`;
+        }
+    }
+
+    // Просмотр видео
+    function viewVideo(filename) {
+        const videoUrl = `/video/${filename}`;
+
+        // Создаем модальное окно для просмотра видео
+        const modal = document.createElement('div');
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100%';
+        modal.style.height = '100%';
+        modal.style.backgroundColor = 'rgba(0,0,0,0.8)';
+        modal.style.display = 'flex';
+        modal.style.justifyContent = 'center';
+        modal.style.alignItems = 'center';
+        modal.style.zIndex = '1000';
+
+        modal.innerHTML = `
+        <div style="background: white; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3>${filename}</h3>
+                <button onclick="this.closest('div').parentElement.remove()" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+                    ✕
+                </button>
+            </div>
+            <video controls class="video-player">
+                <source src="${videoUrl}" type="video/mp4">
+                Ваш браузер не поддерживает видео тег.
+            </video>
+        </div>
+    `;
+
+        document.body.appendChild(modal);
+
+        // Закрытие по клику вне видео
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+    }
+
+    // Удаление видео
+    async function deleteVideo(filename) {
+        if (!confirm(`Удалить видео "${filename}"?`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/delete-video/${filename}`, {
+                method: 'DELETE'
+            });
+            const result = await res.json();
+
+            if (res.ok) {
+                alert('✅ Видео успешно удалено');
+                loadVideos(); // Обновляем список
+            } else {
+                alert(`❌ Ошибка: ${result.message || 'Неизвестная ошибка'}`);
+            }
+        } catch (err) {
+            alert(`❌ Сетевая ошибка: ${err.message}`);
+        }
+    }
+
+    // Автоматически загружаем список видео при загрузке страницы
+    document.addEventListener('DOMContentLoaded', function () {
+        loadVideos();
+    });
+</script>
+</body>
+</html>

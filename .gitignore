@@ -1,0 +1,16 @@
+# Frontend build
+frontend/dist/
+frontend/.angular/
+
+# Backend build
+backend/app
+backend/app.exe
+backend/*.log
+
+# Node modules
+frontend/node_modules/
+node_modules/
+
+# IDE
+.vscode/
+.idea/
