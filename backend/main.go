@@ -797,12 +797,12 @@ func uploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ограничиваем размер файла (100MB)
-	err := r.ParseMultipartForm(100 << 20)
-	if err != nil {
-		http.Error(w, "Слишком большой файл (макс. 100MB) или ошибка загрузки", http.StatusBadRequest)
-		return
-	}
+    // Увеличиваем лимит до 2GB (2 << 30)
+    err := r.ParseMultipartForm(2 << 30) // 2GB
+    if err != nil {
+        http.Error(w, "Слишком большой файл (макс. 2GB) или ошибка загрузки", http.StatusBadRequest)
+        return
+    }
 
 	file, header, err := r.FormFile("video")
 	if err != nil {
