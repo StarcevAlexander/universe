@@ -1,4 +1,4 @@
-name: Deploy Go + Angular App
+name: Simple Deploy
 
 on:
   push:
@@ -9,67 +9,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Show repository structure
-        run: |
-          echo "=== Full repository structure ==="
-          find . -type f | head -30
-          echo "=== Frontend ==="
-          ls -la frontend/
-          echo "=== Backend ==="
-          ls -la backend/
+      - name: List all files
+        run: find . -type f | head -20
 
-      - name: Setup Node.js and build Angular
+      - name: Simple file copy test
         run: |
-          cd frontend
-          npm install
-          npm run build:prod
-          echo "Frontend built:"
-          ls -la dist/
-
-      - name: Setup Go and build backend
-        run: |
-          cd backend
-          go mod download
-          GOOS=linux GOARCH=amd64 go build -o app main.go
-          echo "Backend built:"
-          ls -la
-
-      - name: Setup SSH connection
-        run: |
+          # Создаем тестовый файл
+          echo "TEST FILE" > test.txt
+          echo "<html><body><h1>Works!</h1></body></html>" > index.html
+          
+          # Настраиваем SSH
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/vm_key
           chmod 600 ~/.ssh/vm_key
           ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
           
-          # Тестируем подключение
-          ssh -i ~/.ssh/vm_key ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} "echo 'SSH connection successful!'"
-
-      - name: Deploy using rsync
-        run: |
-          # Деплоим фронтенд
-          echo "Deploying frontend..."
-          rsync -avz -e "ssh -i ~/.ssh/vm_key -o StrictHostKeyChecking=no" \
-            frontend/dist/ ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:/var/www/your-app/
+          # Копируем тестовые файлы
+          scp -i ~/.ssh/vm_key test.txt index.html ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:/var/www/your-app/
           
-          # Деплоим бэкенд
-          echo "Deploying backend..."
-          scp -i ~/.ssh/vm_key backend/app ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }}:/var/www/your-app/
-          
-          echo "Deployment completed!"
-
-      - name: Start application
-        run: |
-          ssh -i ~/.ssh/vm_key ${{ secrets.VM_USERNAME }}@${{ secrets.VM_HOST }} "
-            cd /var/www/your-app
-            chmod +x app
-            # Останавливаем старую версию
-            pkill app || true
-            # Запускаем новую
-            nohup ./app > app.log 2>&1 &
-            echo 'App started! Check logs:'
-            sleep 2
-            ps aux | grep app | grep -v grep
-          "
+          echo "Basic file copy worked!"
