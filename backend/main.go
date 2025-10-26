@@ -24,12 +24,13 @@ import (
 )
 
 const (
-	SMTPHost     = "smtp.yandex.ru"
-	SMTPPort     = "587"
-	SMTPUsername = "79140050089@yandex.ru"
-	SMTPPassword = "qoskpuzbchyqught"
-	ToEmail      = "79140050089@yandex.ru"
-	UploadDir    = "video"
+    SMTPHost     = "smtp.yandex.ru"
+    SMTPPort     = "587"
+    SMTPUsername = "79140050089@yandex.ru"
+    SMTPPassword = "qoskpuzbchyqught"
+    ToEmail      = "79140050089@yandex.ru"
+    UploadDir    = "video"
+    DBConnection = "myuser:mypassword@tcp(localhost:3306)/myapp?charset=utf8mb4"
 )
 
 type User struct {
@@ -43,7 +44,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := sql.Open("mysql", "root:mypassword@tcp(127.0.0.1:3306)/testdb?charset=utf8mb4")
+	db, err := sql.Open("mysql", DBConnection)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -96,7 +97,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := sql.Open("mysql", "root:mypassword@tcp(127.0.0.1:3306)/testdb?charset=utf8mb4")
+	db, err := sql.Open("mysql", DBConnection)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -117,44 +118,42 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func initDB() {
-	// Подключаемся без указания БД
-	db, err := sql.Open("mysql", "root:mypassword@tcp(127.0.0.1:3306)/testdb?charset=utf8mb4")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
+    db, err := sql.Open("mysql", DBConnection)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
 
-	_, err = db.Exec("CREATE DATABASE IF NOT EXISTS testdb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-	if err != nil {
-		log.Fatal("Не удалось создать БД:", err)
-	}
+    // Проверяем подключение
+    err = db.Ping()
+    if err != nil {
+        log.Fatal("Не удалось подключиться к БД:", err)
+    }
 
-	// Теперь подключаемся к testdb для создания таблицы
-	db2, err := sql.Open("mysql", "root:mypassword@tcp(127.0.0.1:3306)/testdb?charset=utf8mb4")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db2.Close()
+    // Создаем таблицу если не существует
+    _, err = db.Exec(`
+        CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `)
+    if err != nil {
+        log.Fatal("Не удалось создать таблицу:", err)
+    }
 
-	_, err = db2.Exec(`
-		CREATE TABLE IF NOT EXISTS users (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			name VARCHAR(255) NOT NULL
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-	`)
-	if err != nil {
-		log.Fatal("Не удалось создать таблицу:", err)
-	}
+    // Добавляем тестовые данные если таблица пустая
+    var count int
+    db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+    if count == 0 {
+        _, err = db.Exec(`INSERT INTO users (name) VALUES ('Алексей'), ('Мария')`)
+        if err != nil {
+            log.Println("Не удалось вставить тестовые данные:", err)
+        } else {
+            log.Println("Тестовые данные добавлены в MySQL.")
+        }
+    }
 
-	var count int
-	db2.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
-	if count == 0 {
-		_, err = db2.Exec(`INSERT INTO users (name) VALUES ('Алексей'), ('Мария')`)
-		if err != nil {
-			log.Fatal("Не удалось вставить данные:", err)
-		}
-		log.Println("Тестовые данные добавлены в MySQL.")
-	}
+    log.Println("✅ База данных инициализирована успешно")
 }
 
 func main() {
@@ -233,7 +232,7 @@ func uploadCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	db, err := sql.Open("mysql", "root:mypassword@tcp(127.0.0.1:3306)/testdb?charset=utf8mb4")
+	db, err := sql.Open("mysql", DBConnection)
 	if err != nil {
 		http.Error(w, "Ошибка подключения к БД", http.StatusInternalServerError)
 		return
@@ -357,7 +356,7 @@ func exportCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := sql.Open("mysql", "root:mypassword@tcp(127.0.0.1:3306)/testdb?charset=utf8mb4")
+	db, err := sql.Open("mysql", DBConnection)
 	if err != nil {
 		http.Error(w, "DB error", http.StatusInternalServerError)
 		return
@@ -392,7 +391,7 @@ func exportCSV(w http.ResponseWriter, r *http.Request) {
 
 // generateCSV создает CSV файл в памяти
 func generateCSV() (*bytes.Buffer, error) {
-	db, err := sql.Open("mysql", "root:mypassword@tcp(127.0.0.1:3306)/testdb?charset=utf8mb4")
+	db, err := sql.Open("mysql", DBConnection)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +440,7 @@ func sendCSVByEmail() error {
 	}
 
 	// Подсчитываем количество пользователей для темы письма
-	db, err := sql.Open("mysql", "root:mypassword@tcp(127.0.0.1:3306)/testdb?charset=utf8mb4")
+	db, err := sql.Open("mysql", DBConnection)
 	if err != nil {
 		return err
 	}
