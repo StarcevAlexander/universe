@@ -115,7 +115,7 @@ export class App implements OnInit {
 
   // Просмотр видео
   viewVideo(filename: string) {
-    const videoUrl = `/api/video/${filename}`;
+    const videoUrl = `/video/${filename}`;
 
     // Блокируем скролл body
     document.body.classList.add('popup-open');
