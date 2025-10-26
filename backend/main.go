@@ -11,6 +11,7 @@ import (
 	"log"
 	"math/rand"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/smtp"
 	"os"
@@ -800,92 +801,127 @@ func serveVideoHandler(w http.ResponseWriter, r *http.Request) {
 
 // uploadVideoHandler обрабатывает загрузку видео
 func uploadVideoHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("=== НАЧАЛО ЗАГРУЗКИ ВИДЕО ===")
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Метод не разрешён", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Увеличиваем лимит до 2GB (2 << 30)
-	err := r.ParseMultipartForm(2 << 30) // 2GB
+	// ⭐⭐⭐ ПОТОКОВАЯ ЗАГРУЗКА БЕЗ ЗАГРУЗКИ В ПАМЯТЬ ⭐⭐⭐
+	reader, err := r.MultipartReader()
 	if err != nil {
-		http.Error(w, "Слишком большой файл (макс. 2GB) или ошибка загрузки", http.StatusBadRequest)
+		log.Printf("Ошибка создания MultipartReader: %v", err)
+		http.Error(w, "Ошибка загрузки файла", http.StatusBadRequest)
 		return
 	}
 
-	file, header, err := r.FormFile("video")
-	if err != nil {
+	// Ищем часть с видео
+	var filePart *multipart.Part
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			http.Error(w, "Ошибка чтения частей файла", http.StatusInternalServerError)
+			return
+		}
+
+		if part.FormName() == "video" {
+			filePart = part
+			break
+		}
+		part.Close()
+	}
+
+	if filePart == nil {
 		http.Error(w, "Файл не загружен. Используйте поле 'video'", http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
+	defer filePart.Close()
 
-	// Проверяем тип файла
-	buffer := make([]byte, 512)
-	_, err = file.Read(buffer)
-	if err != nil && err != io.EOF {
-		http.Error(w, "Ошибка чтения файла: "+err.Error(), http.StatusInternalServerError)
+	// Получаем имя файла и проверяем расширение
+	filename := filePart.FileName()
+	if filename == "" {
+		http.Error(w, "Имя файла не указано", http.StatusBadRequest)
 		return
 	}
 
-	// Проверяем, что это видео файл
-	contentType := http.DetectContentType(buffer)
-	if !strings.HasPrefix(contentType, "video/") {
-		http.Error(w, fmt.Sprintf("Файл должен быть видео. Обнаружен тип: %s", contentType), http.StatusBadRequest)
-		return
-	}
-
-	// Проверяем расширение файла
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if !isVideoFile(header.Filename) {
-		http.Error(w, fmt.Sprintf("Неподдерживаемый формат видео: %s", ext), http.StatusBadRequest)
-		return
-	}
-
-	// Возвращаемся к началу файла
-	_, err = file.Seek(0, 0)
-	if err != nil {
-		http.Error(w, "Ошибка чтения файла: "+err.Error(), http.StatusInternalServerError)
+	if !isVideoFile(filename) {
+		http.Error(w, "Файл не является видео", http.StatusBadRequest)
 		return
 	}
 
 	// Создаем уникальное имя файла
-	filename := fmt.Sprintf("%d_%s%s", time.Now().Unix(), generateRandomString(8), ext)
-	filePath := filepath.Join("/var/www/your-app/video", filename)
+	ext := strings.ToLower(filepath.Ext(filename))
+	newFilename := fmt.Sprintf("%d_%s%s", time.Now().Unix(), generateRandomString(8), ext)
+	filePath := filepath.Join("/var/www/your-app/video", newFilename)
 
 	// Создаем файл на сервере
 	dst, err := os.Create(filePath)
 	if err != nil {
-		http.Error(w, "Не удалось сохранить файл: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("Ошибка создания файла %s: %v", filePath, err)
+		http.Error(w, "Не удалось создать файл: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer dst.Close()
 
-	// Копируем содержимое файла
-	bytesCopied, err := io.Copy(dst, file)
-	if err != nil {
-		// Удаляем частично загруженный файл в случае ошибки
-		os.Remove(filePath)
-		http.Error(w, "Ошибка сохранения файла: "+err.Error(), http.StatusInternalServerError)
-		return
+	// ⭐⭐⭐ ПОТОКОВОЕ КОПИРОВАНИЕ с маленьким буфером ⭐⭐⭐
+	buffer := make([]byte, 32*1024) // 32KB буфер - очень мало памяти!
+	var totalBytes int64
+	startTime := time.Now()
+	lastLog := time.Now()
+
+	for {
+		n, err := filePart.Read(buffer)
+		if n > 0 {
+			// Проверяем общий размер (макс 2GB)
+			totalBytes += int64(n)
+			if totalBytes > (2 << 30) {
+				dst.Close()
+				os.Remove(filePath)
+				http.Error(w, "Файл слишком большой. Максимальный размер: 2GB", http.StatusBadRequest)
+				return
+			}
+
+			_, writeErr := dst.Write(buffer[:n])
+			if writeErr != nil {
+				dst.Close()
+				os.Remove(filePath)
+				http.Error(w, "Ошибка записи файла: "+writeErr.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			// Логируем прогресс каждые 5 секунд
+			if time.Since(lastLog) > 5*time.Second {
+				log.Printf("Прогресс загрузки: %.2f MB", float64(totalBytes)/(1024*1024))
+				lastLog = time.Now()
+			}
+		}
+
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			dst.Close()
+			os.Remove(filePath)
+			http.Error(w, "Ошибка чтения файла: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
-	// Получаем информацию о файле
-	fileInfo, err := os.Stat(filePath)
-	if err != nil {
-		http.Error(w, "Ошибка получения информации о файле: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	log.Printf("Видео успешно загружено: %s (%d bytes)", filename, bytesCopied)
+	log.Printf("✅ Видео успешно загружено: %s (%d bytes, время: %v)",
+		newFilename, totalBytes, time.Since(startTime))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":      "success",
 		"message":     "Видео успешно загружено",
-		"filename":    filename,
-		"size":        fileInfo.Size(),
+		"filename":    newFilename,
+		"size":        totalBytes,
 		"uploaded_at": time.Now().Format("2006-01-02 15:04:05"),
-		"url":         "/video/" + filename,
+		"url":         "/api/video/" + newFilename,
 	})
 }
 
